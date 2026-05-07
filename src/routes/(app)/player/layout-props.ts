@@ -3,7 +3,9 @@ import type { RouteId } from '$app/types'
 import type { LayoutMode } from '$lib/components/ListDetailsLayout.svelte'
 
 const isRouteQueueOrHistory = (routeId: RouteId): boolean =>
-	routeId === '/(app)/player/queue' || routeId === '/(app)/player/history'
+	routeId === '/(app)/player/queue' ||
+	routeId === '/(app)/player/history' ||
+	routeId === '/(app)/player/lyrics'
 
 const getLayoutMode = (isCompact: boolean, routeId: RouteId | null): LayoutMode => {
 	if (!isCompact) {
