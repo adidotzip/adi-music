@@ -239,6 +239,34 @@ const getLyricsPlusLines = (data: unknown, durationSeconds: number): SyncedLyric
 		return data.lines.map(normalizeLine).filter((line): line is SyncedLyricsLine => !!line)
 	}
 
+	if (Array.isArray(data.lyrics)) {
+		return data.lyrics
+			.map((line): SyncedLyricsLine | undefined => {
+				if (
+					!isRecord(line) ||
+					typeof line.text !== 'string' ||
+					!isFiniteNumber(line.time) ||
+					!isFiniteNumber(line.duration)
+				) {
+					return
+				}
+
+				const wordsList = line.text.split(whitespacePattern).filter(Boolean)
+				const totalDuration = line.duration
+				const wordDuration = totalDuration / (wordsList.length || 1)
+
+				return {
+					startTime: line.time,
+					endTime: line.time + line.duration,
+					words: wordsList.map((word, i) => ({
+						string: word + (i === wordsList.length - 1 ? '' : ' '),
+						time: Math.round(line.time + i * wordDuration),
+					})),
+				}
+			})
+			.filter((line): line is SyncedLyricsLine => !!line)
+	}
+
 	const lyricsText =
 		typeof data.syncedLyrics === 'string'
 			? data.syncedLyrics
