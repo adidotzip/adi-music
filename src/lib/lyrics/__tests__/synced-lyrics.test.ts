@@ -46,6 +46,34 @@ describe('synced lyrics', () => {
 		expect(lines[0]?.words.map((word) => word.string).join('')).toBe('Hello world')
 	})
 
+	it('prefers LyricsPlus endpoint when available', async () => {
+		const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+			jsonResponse({
+				syncedLyrics: '[00:01.00]First line\n[00:02.00]Second line',
+			}),
+		)
+		vi.stubGlobal('fetch', fetchMock)
+
+		const result = await fetchSyncedLyrics(createTrack(), new AbortController().signal)
+
+		expect(fetchMock).toHaveBeenCalledTimes(1)
+		const requestUrl = new URL(String(fetchMock.mock.calls[0]?.[0]))
+		expect(requestUrl.hostname).toBe('lyricsplus.prjktla.workers.dev')
+		expect(requestUrl.pathname).toBe('/v2/lyrics/get')
+		expect(requestUrl.searchParams.get('title')).toBe('Drowning (Avicii Remix)')
+		expect(requestUrl.searchParams.get('artist')).toBe('Armin van Buuren, Laura V')
+		expect(requestUrl.searchParams.get('source')).toBe('apple')
+		expect(result.status).toBe('found')
+		if (result.status !== 'found') {
+			return
+		}
+		expect(result.source).toBe('lyricsplus')
+		expect(result.lines.map((line) => line.words.map((word) => word.string).join(''))).toEqual([
+			'First line',
+			'Second line',
+		])
+	})
+
 	it('falls back to LRCLIB search when exact lookup misses matching synced lyrics', async () => {
 		const fetchMock = vi
 			.fn<typeof fetch>()
@@ -99,5 +127,37 @@ describe('synced lyrics', () => {
 		const result = await fetchSyncedLyrics(createTrack(), new AbortController().signal)
 
 		expect(result.status).toBe('not-found')
+	})
+
+	it('falls back to LRCLIB search when exact lookup errors', async () => {
+		const fetchMock = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(new Response(null, { status: 404 }))
+			.mockResolvedValueOnce(new Response(null, { status: 500 }))
+			.mockResolvedValueOnce(
+				jsonResponse([
+					{
+						trackName: 'Drowning - Avicii Remix',
+						artistName: 'Armin van Buuren feat. Laura V',
+						duration: 472,
+						syncedLyrics: '[00:01.00]First line\n[00:02.00]Second line',
+					},
+				]),
+			)
+		vi.stubGlobal('fetch', fetchMock)
+
+		const result = await fetchSyncedLyrics(createTrack(), new AbortController().signal)
+
+		expect(fetchMock).toHaveBeenCalledTimes(3)
+		expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/api/search')
+		expect(result.status).toBe('found')
+		if (result.status !== 'found') {
+			return
+		}
+		expect(result.source).toBe('lrclib')
+		expect(result.lines.map((line) => line.words.map((word) => word.string).join(''))).toEqual([
+			'First line',
+			'Second line',
+		])
 	})
 })

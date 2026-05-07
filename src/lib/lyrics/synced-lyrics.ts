@@ -17,7 +17,7 @@ export interface SyncedLyricsLine {
 	words: SyncedLyricsWord[]
 }
 
-export type SyncedLyricsSource = 'youlyplus' | 'lrclib'
+export type SyncedLyricsSource = 'lyricsplus' | 'lrclib'
 
 export type SyncedLyricsResult =
 	| {
@@ -47,7 +47,7 @@ const isFiniteNumber = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isFinite(value)
 
 /**
- * Normalization helpers for YoulyPlus
+ * Normalization helpers for remote lyrics providers
  */
 const normalizeWord = (value: unknown): SyncedLyricsWord | undefined => {
 	if (!isRecord(value) || typeof value.string !== 'string' || !isFiniteNumber(value.time)) {
@@ -107,7 +107,7 @@ export const parseLrc = (lyrics: string, durationMs: number): SyncedLyricsLine[]
 			}
 
 			return matches.map((match) => ({
-				startTime: parseTimestamp(match[1], match[2], match[3]),
+				startTime: parseTimestamp(match[1], match[2], match[3] as string | undefined),
 				text,
 			}))
 		})
@@ -230,13 +230,47 @@ const scoreLrclibSearchResult = (
 }
 
 // API Fetcher
-const fetchYoulyPlusLyrics = async (
+const getLyricsPlusLines = (data: unknown, durationSeconds: number): SyncedLyricsLine[] => {
+	if (!isRecord(data)) {
+		return []
+	}
+
+	if (Array.isArray(data.lines)) {
+		return data.lines.map(normalizeLine).filter((line): line is SyncedLyricsLine => !!line)
+	}
+
+	const lyricsText =
+		typeof data.syncedLyrics === 'string'
+			? data.syncedLyrics
+			: typeof data.lyrics === 'string'
+			? data.lyrics
+			: null
+
+	if (lyricsText) {
+		return parseLrc(lyricsText, durationSeconds * 1000)
+	}
+
+	if (isRecord(data.data)) {
+		return getLyricsPlusLines(data.data, durationSeconds)
+	}
+
+	return []
+}
+
+const fetchLyricsPlusLyrics = async (
 	track: TrackData,
 	signal: AbortSignal,
 ): Promise<SyncedLyricsLine[]> => {
 	try {
-		const url = new URL(YOULYPLUS_LYRICS_ENDPOINT)
-		url.searchParams.set('id', String(track.id))
+		const url = new URL(LYRICSPLUS_LYRICS_ENDPOINT)
+		url.searchParams.set('title', track.name)
+		url.searchParams.set('artist', formatArtists(track.artists))
+		url.searchParams.set('source', 'apple')
+
+		const maybeIsrc = (track as { isrc?: unknown }).isrc
+		if (typeof maybeIsrc === 'string' && maybeIsrc.trim()) {
+			url.searchParams.set('isrc', maybeIsrc)
+		}
 
 		const response = await fetch(url, { signal })
 		if (!response.ok) {
@@ -244,10 +278,7 @@ const fetchYoulyPlusLyrics = async (
 		}
 
 		const data: unknown = await response.json()
-		if (isRecord(data) && Array.isArray(data.lines)) {
-			return data.lines.map(normalizeLine).filter((line): line is SyncedLyricsLine => !!line)
-		}
-		return []
+		return getLyricsPlusLines(data, getDurationSeconds(track))
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
 			throw error
@@ -330,11 +361,7 @@ const fetchLrclibLyrics = async (
 		}
 
 		const searchResult = await fetchLrclibSearchLyrics(track, durationSeconds, signal)
-		if (searchResult.status === 'found' || exactResult.status !== 'error') {
-			return searchResult
-		}
-
-		return exactResult
+		return searchResult
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
 			throw error
@@ -348,9 +375,9 @@ export const fetchSyncedLyrics = async (
 	signal: AbortSignal,
 ): Promise<SyncedLyricsResult> => {
 	try {
-		const youlyLines = await fetchYoulyPlusLyrics(track, signal)
-		if (youlyLines.length > 0) {
-			return { status: 'found', source: 'youlyplus', lines: youlyLines }
+		const lyricsPlusLines = await fetchLyricsPlusLyrics(track, signal)
+		if (lyricsPlusLines.length > 0) {
+			return { status: 'found', source: 'lyricsplus', lines: lyricsPlusLines }
 		}
 
 		return await fetchLrclibLyrics(track, signal)

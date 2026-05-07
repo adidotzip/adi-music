@@ -45,7 +45,9 @@
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
 	const activeLineIndex = $derived(getActiveLineIndex(lines, currentTimeMs))
-	const sourceLabel = $derived(foundResult?.source === 'youlyplus' ? 'YoulyPlus' : 'LRCLIB')
+	const sourceLabel = $derived(
+	foundResult?.source === 'lyricsplus' ? 'LyricsPlus' : 'LRCLIB',
+)
 
 	const getActiveWordIndex = (line: SyncedLyricsLine): number => {
 		// Optimization: Find index using reverse loop or findLastIndex
