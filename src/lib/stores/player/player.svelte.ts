@@ -208,7 +208,7 @@ export class PlayerStore {
 
 		audio.ontimeupdate = throttle(() => {
 			this.currentTime = audio.currentTime
-		}, 250)
+		}, 100)
 
 		const setPlaybackRate = () => {
 			audio.playbackRate = clamp(

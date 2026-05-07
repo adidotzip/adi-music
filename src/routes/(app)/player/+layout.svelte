@@ -15,6 +15,7 @@
 	import RepeatButton from '$lib/components/player/buttons/RepeatButton.svelte'
 	import ShuffleButton from '$lib/components/player/buttons/ShuffleButton.svelte'
 	import PlayerArtwork from '$lib/components/player/PlayerArtwork.svelte'
+	import SyncedLyrics from '$lib/components/player/SyncedLyrics.svelte'
 	import Timeline from '$lib/components/player/Timeline.svelte'
 	import ScrollContainer from '$lib/components/ScrollContainer.svelte'
 	import Slider from '$lib/components/Slider.svelte'
@@ -34,9 +35,18 @@
 	const dialogs = useDialogsStore()
 	const activeTrack = $derived(player.activeTrack)
 
-	const isSelectedTabQueue = $derived(
-		page.route.id === '/(app)/player' || page.route.id === '/(app)/player/queue',
-	)
+	const selectedDetailsTab = $derived.by(() => {
+		if (page.route.id === '/(app)/player/history') {
+			return 1
+		}
+
+		if (page.route.id === '/(app)/player/lyrics') {
+			return 2
+		}
+
+		return 0
+	})
+	const isSelectedTabQueue = $derived(selectedDetailsTab === 0)
 
 	const { isCompactHorizontal, isCompactVertical, layoutMode } = $derived(
 		getLayoutProps(page.route.id),
@@ -138,6 +148,8 @@
 					</IconButton>
 
 					{#if layoutMode === 'list'}
+						<IconButton tooltip={m.playerOpenLyrics()} icon="musicNote" as="a" href="/player/lyrics" />
+
 						<IconButton tooltip={m.playerOpenQueue()} icon="trayFull" as="a" href="/player/queue" />
 					{/if}
 				</div>
@@ -175,10 +187,11 @@
 		>
 			<div class="absolute inset-0 m-auto size-max">
 				<Tabs
-					selectedIndex={isSelectedTabQueue ? 0 : 1}
+					selectedIndex={selectedDetailsTab}
 					items={[
 						{ id: 'queue', text: m.queue() },
 						{ id: 'history', text: m.playerHistory() },
+						{ id: 'lyrics', text: m.lyrics() },
 					]}
 					onchange={(item) => {
 						void goto(`/player/${item.id}`, { replaceState: true })
@@ -190,7 +203,9 @@
 				</Tabs>
 			</div>
 
-			{#if isSelectedTabQueue}
+			{#if page.route.id === '/(app)/player/lyrics'}
+				<div class="w-11"></div>
+			{:else if isSelectedTabQueue}
 				<IconButton
 					tooltip={m.playerClearQueue()}
 					disabled={player.isQueueEmpty}
@@ -209,7 +224,9 @@
 
 		<div class="mx-auto flex w-full max-w-(--app-max-content-width) grow flex-col">
 			<div class="flex grow p-4">
-				{#if isSelectedTabQueue}
+				{#if page.route.id === '/(app)/player/lyrics'}
+					<SyncedLyrics track={activeTrack} currentTimeMs={player.currentTime * 1000} />
+				{:else if isSelectedTabQueue}
 					{#if player.isQueueEmpty}
 						{@render emptyList(m.playerQueueEmpty())}
 					{:else}
