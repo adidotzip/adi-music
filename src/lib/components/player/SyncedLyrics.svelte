@@ -1,11 +1,28 @@
+<script lang="ts" module>
+	import type { SyncedLyricsLine } from '$lib/lyrics/synced-lyrics.ts'
+
+	const getActiveLineIndex = (
+		lines: readonly SyncedLyricsLine[],
+		currentTimeMs: number,
+	): number => {
+		let index = -1
+		for (let i = 0; i < lines.length; i += 1) {
+			if (currentTimeMs >= lines[i].startTime) {
+				index = i
+			} else {
+				break // Since lines are sorted, we can stop early
+			}
+		}
+		return index
+	}
+</script>
+
 <script lang="ts">
 	import Button from '$lib/components/Button.svelte'
 	import Icon from '$lib/components/icon/Icon.svelte'
 	import Spinner from '$lib/components/Spinner.svelte'
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import type { TrackData } from '$lib/library/get/value.ts'
-	import { usePlayer } from '$lib/player' // Assuming this exists based on your code
-	import * as m from '$lib/paraglide/messages' // Assuming paraglide for 'm'
 	import {
 		fetchSyncedLyrics,
 		type SyncedLyricsLine,
@@ -23,6 +40,7 @@
 	let result: SyncedLyricsResult | undefined = $state()
 	let loading = $state(false)
 	let scrollerElement: HTMLElement | undefined = $state()
+	let reloadCount = $state(0)
 
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
@@ -31,8 +49,10 @@
 
 	const getActiveWordIndex = (line: SyncedLyricsLine): number => {
 		// Optimization: Find index using reverse loop or findLastIndex
-		for (let i = line.words.length - 1; i >= 0; i--) {
-			if (currentTimeMs >= line.words[i].time) return i
+		for (let i = line.words.length - 1; i >= 0; i -= 1) {
+			if (currentTimeMs >= line.words[i].time) {
+				return i
+			}
 		}
 		return -1
 	}
@@ -45,19 +65,27 @@
 			return
 		}
 
+		const requestedReloadCount = reloadCount
+
 		const controller = new AbortController()
 		loading = true
-		
+
 		fetchSyncedLyrics(track, controller.signal)
 			.then((nextResult) => {
-				if (!controller.signal.aborted) result = nextResult
+				if (!controller.signal.aborted && requestedReloadCount === reloadCount) {
+					result = nextResult
+				}
 			})
-			.catch((err) => {
-				if (err.name === 'AbortError') return
+			.catch((error: unknown) => {
+				if (error instanceof Error && error.name === 'AbortError') {
+					return
+				}
 				result = { status: 'error' }
 			})
 			.finally(() => {
-				if (!controller.signal.aborted) loading = false
+				if (!controller.signal.aborted && requestedReloadCount === reloadCount) {
+					loading = false
+				}
 			})
 
 		return () => controller.abort()
@@ -66,19 +94,21 @@
 	// Auto-scroll logic
 	$effect(() => {
 		const index = activeLineIndex
-		if (index < 0 || !scrollerElement) return
+		if (index < 0 || !scrollerElement) {
+			return
+		}
 
 		const activeEl = scrollerElement.querySelector(`[data-line-index="${index}"]`)
 		if (activeEl) {
 			activeEl.scrollIntoView({
 				block: 'center',
-				behavior: 'smooth'
+				behavior: 'smooth',
 			})
 		}
 	})
 
 	const retry = () => {
-		if (track) result = undefined // Trigger re-run of effect via track dependency if needed
+		reloadCount += 1
 	}
 </script>
 
@@ -109,7 +139,9 @@
 					{formatArtists(track.artists)}
 				</div>
 			</div>
-			<div class="rounded-full bg-surfaceContainerHighest px-3 py-1 text-label-sm text-onSurfaceVariant">
+			<div
+				class="rounded-full bg-surfaceContainerHighest px-3 py-1 text-label-sm text-onSurfaceVariant"
+			>
 				{sourceLabel}
 			</div>
 		</div>
@@ -119,20 +151,17 @@
 			{#each lines as line, lineIndex (lineIndex)}
 				{@const isActiveLine = lineIndex === activeLineIndex}
 				{@const activeWordIdx = getActiveWordIndex(line)}
-				
+
 				<button
 					type="button"
-					class="interactable lyric-line"
+					class="lyric-line interactable"
 					class:active={isActiveLine}
 					class:past={lineIndex < activeLineIndex}
 					data-line-index={lineIndex}
 					onclick={() => player.seek(line.startTime / 1000)}
 				>
 					{#each line.words as word, wordIndex}
-						<span
-							class="lyric-word"
-							class:active-word={isActiveLine && wordIndex <= activeWordIdx}
-						>
+						<span class="lyric-word" class:active-word={isActiveLine && wordIndex <= activeWordIdx}>
 							{word.string}
 						</span>
 					{/each}
@@ -154,7 +183,7 @@
 	.lyric-word {
 		transition: color 200ms ease;
 	}
-	
+
 	.active .lyric-word.active-word {
 		background: linear-gradient(90deg, var(--color-primary), var(--color-tertiary));
 		background-clip: text;
@@ -163,17 +192,3 @@
 		text-shadow: 0 0 15px var(--alpha(var(--color-primary) / 30%));
 	}
 </style>
-
-<script lang="ts" module>
-	const getActiveLineIndex = (lines: readonly SyncedLyricsLine[], currentTimeMs: number): number => {
-		let index = -1
-		for (let i = 0; i < lines.length; i++) {
-			if (currentTimeMs >= lines[i].startTime) {
-				index = i
-			} else {
-				break // Since lines are sorted, we can stop early
-			}
-		}
-		return index
-	}
-</script>
