@@ -1,7 +1,7 @@
 import { formatArtists, formatNameOrUnknown } from '$lib/helpers/utils/text.ts'
 import type { TrackData } from '$lib/library/get/value.ts'
 
-const YOULYPLUS_LYRICS_ENDPOINT = 'https://youlyplus.prjktla.my.id/api/v2/lyrics'
+const LYRICSPLUS_LYRICS_ENDPOINT = 'https://lyricsplus.prjktla.workers.dev/v2/lyrics/get'
 const LRCLIB_GET_ENDPOINT = 'https://lrclib.net/api/get'
 const LRCLIB_SEARCH_ENDPOINT = 'https://lrclib.net/api/search'
 const LRCLIB_DURATION_TOLERANCE_SECONDS = 4
