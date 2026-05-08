@@ -39,7 +39,6 @@
 	let result: SyncedLyricsResult | undefined = $state()
 	let loading = $state(false)
 	let scrollerElement: HTMLElement | undefined = $state()
-	let lineRefs: (HTMLElement | null)[] = $state([]) // ⚡ Fix #6: DOM query caching
 	let reloadCount = $state(0)
 	
 	let previousActiveIndex = -1
@@ -47,8 +46,7 @@
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
 
-	// ⚡ Fix #5: $derived inherently caches this unless `lines` changes. 
-	// currentTimeMs won't trigger recalculation here.
+	// Pre-process lines to detect secondary vocals/lyrics enclosed in ()
 	const processedLines = $derived(
 		lines.map((line) => {
 			let inSecondary = false
@@ -68,6 +66,7 @@
 				}
 			})
 
+			// Check if the entire line is wrapped in parentheses
 			const lineText = words.map((w) => w.string).join('').trim()
 			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
 
@@ -90,6 +89,7 @@
 		return -1
 	}
 
+	// Fetching logic
 	$effect(() => {
 		if (!track) {
 			result = undefined
@@ -120,15 +120,19 @@
 		return () => controller.abort()
 	})
 
-	// 🌌 Fix #2 & #6: Magnetic predictive scrolling with cached refs
+	// Premium hardware-accelerated smooth scrolling
 	const scrollToActiveLine = (smooth = true) => {
 		if (!scrollerElement || activeLineIndex < 0) return
 
-		const activeEl = lineRefs[activeLineIndex]
+		const activeEl = scrollerElement.querySelector<HTMLElement>(
+			`[data-line-index="${activeLineIndex}"]`,
+		)
 		if (!activeEl) return
 
-		// Magnetic centering: sits slightly above exact center
-		const targetScroll = activeEl.offsetTop - scrollerElement.clientHeight * 0.38
+		const targetScroll =
+			activeEl.offsetTop -
+			scrollerElement.clientHeight / 2 +
+			activeEl.clientHeight / 2
 
 		scrollerElement.scrollTo({
 			top: targetScroll,
@@ -169,7 +173,6 @@
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
 	{:else if loading}
-		<!-- Skeleton States -->
 		<div class="lyrics-header">
 			<div class="min-w-0">
 				<div class="skeleton bg-surfaceContainerHighest mb-2 h-7 w-36 rounded-md"></div>
@@ -198,36 +201,33 @@
 			<div class="lyrics-spacer"></div>
 			{#each processedLines as line, lineIndex (lineIndex)}
 				{@const isActiveLine = lineIndex === activeLineIndex}
-				{@const isPastLine = lineIndex < activeLineIndex}
-				{@const isUpcomingLine = lineIndex === activeLineIndex + 1}
 				{@const activeWordIdx = getActiveWordIndex(line, currentTimeMs)}
 
 				<button
-					bind:this={lineRefs[lineIndex]}
 					type="button"
 					class="lyric-line interactable"
 					class:active={isActiveLine}
-					class:past={isPastLine}
-					class:upcoming={isUpcomingLine}
+					class:past={lineIndex < activeLineIndex}
 					class:secondary-line={line.isSecondaryLine}
-					onclick={() => player.seek(line.startTime / 1000)}
+					data-line-index={lineIndex}
+					onclick={() => {
+						player.seek(line.startTime / 1000);
+					}}
 				>
 					{#each line.words as word, wordIndex}
 						{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
 						{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
 						{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
 						{@const duration = Math.max(nextTime - word.time, 1)}
-						<!-- Pre-calculate pure scale format for hardware acceleration -->
-						{@const wordProgressScale = isCurrentWord 
-							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) 
-							: (isPastWord ? 1 : 0)}
+						{@const wordProgress = isCurrentWord 
+							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100 
+							: (isPastWord ? 100 : 0)}
 						
 						<span 
 							class="lyric-word" 
 							class:active-word={isCurrentWord}
 							class:secondary-word={word.isSecondary && !line.isSecondaryLine}
-							data-word={word.string}
-							style="--word-progress-scale: {wordProgressScale};"
+							style="--word-progress: {wordProgress}%"
 						>{word.string}</span>{' '}
 					{/each}
 				</button>
@@ -269,19 +269,17 @@
 			color-mix(in srgb, var(--primary-color) 15%, transparent) 0%,
 			transparent 100%
 		);
-		/* 🔥 Fix #11: Reduced blur to prevent Safari heat death */
-		filter: blur(24px); 
+		filter: blur(40px); 
 		z-index: 0;
 		pointer-events: none;
 		transition: background 1.5s ease;
-		/* Using opacity/transform animation only */
 		animation: subtle-drift 12s infinite alternate ease-in-out;
 		will-change: opacity, transform;
 	}
 
 	@keyframes subtle-drift {
-		0% { opacity: 0.6; transform: scale(1); }
-		100% { opacity: 0.9; transform: scale(1.05); }
+		0% { opacity: 0.8; transform: scale(1); }
+		100% { opacity: 1; transform: scale(1.05); }
 	}
 
 	.lyrics-header {
@@ -302,10 +300,6 @@
 		overflow-y: auto;
 		padding: 0 2.5rem;
 		z-index: 5;
-		
-		/* 🧃 Fix #7: iOS Safari ultra-native feel */
-		-webkit-overflow-scrolling: touch;
-		overscroll-behavior-y: contain;
 		
 		scrollbar-width: none; 
 		-ms-overflow-style: none;
@@ -334,7 +328,7 @@
 		height: 40vh;
 	}
 
-	/* --- PREMIUM TYPOGRAPHY & LAYERING --- */
+	/* --- CLEAN, PERFORMANCE-OPTIMIZED TYPOGRAPHY --- */
 
 	.lyric-line {
 		display: block;
@@ -346,103 +340,84 @@
 		margin: 0.5rem 0;
 		
 		font-family: var(--font-family-sans, system-ui, -apple-system, sans-serif);
-		/* 🪶 Fix #10: Fluid elegant sizing */
-		font-size: clamp(2rem, 4vw, 3.5rem);
+		font-size: 2.25rem;
+		@media (min-width: 640px) { font-size: 2.5rem; }
+		@media (min-width: 1024px) { font-size: 3.25rem; }
+		
 		font-weight: 700;
 		line-height: 1.2;
 		letter-spacing: -0.02em;
 		white-space: pre-wrap;
 		user-select: none; 
 		
-		/* 🎨 Fix #4: Better inactive readability */
 		color: var(--color-onSurfaceVariant, #a0a0a0);
-		opacity: 0.5;
-		
-		/* ✨ Fix #3: Depth layering perspective */
-		transform-origin: left center;
-		transform: perspective(1000px) translateZ(0) scale(0.95); 
+		opacity: 0.35;
+		transform: scale(0.95); 
+		transform-origin: center left;
 		cursor: pointer;
 
-		will-change: transform, opacity, filter;
+		/* Only animate cheap properties */
+		will-change: transform, opacity;
 		transition:
 			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
-			transform 0.6s cubic-bezier(0.25, 1, 0.5, 1),
-			filter 0.6s ease;
+			transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
 	}
 
-	/* 🎼 Fix #9: Anticipation fade */
-	.lyric-line.upcoming {
-		opacity: 0.72;
+	.lyric-line.secondary-line {
+		font-size: 1.5rem;
+		@media (min-width: 640px) { font-size: 1.75rem; }
+		@media (min-width: 1024px) { font-size: 2.25rem; }
+		padding-left: 2rem;
+		margin-top: -0.25rem;
 	}
 
 	.lyric-line:hover {
-		opacity: 0.8;
+		opacity: 0.6;
 	}
 
 	.lyric-line.active {
 		color: var(--color-onSurface, #ffffff);
 		opacity: 1;
-		transform: perspective(1000px) translateZ(0) scale(1);
+		transform: scale(1);
 		font-weight: 800;
-		
-		/* 🌈 Fix #8: OLED-glow feeling tied to album primary color */
-		text-shadow: 0 0 24px color-mix(in srgb, var(--primary-color) 35%, transparent);
+		/* Subtle shadow for depth, no heavy bleeding */
+		text-shadow: 0 4px 16px rgba(0,0,0,0.4);
 	}
 
-	/* ✨ Fix #3: Depth layer blur for past lines */
+	.lyric-line.secondary-line.active {
+		opacity: 0.85;
+	}
+
 	.lyric-line.past {
-		opacity: 0.28;
-		transform: perspective(1000px) translateZ(-50px) scale(0.92);
-		filter: blur(1px);
-	}
-
-	/* 🌌 THE "FLOATING HARMONY" SECONDARY LYRICS UPGRADE */
-	.lyric-line.secondary-line {
-		font-weight: 500;
-		font-style: italic;
-		opacity: 0.68;
-		/* Ethereal blend instead of tiny text */
-		color: color-mix(in srgb, var(--primary-color) 35%, white 65%);
-		/* Tiny blur for dreamy backing vocal vibe */
-		filter: blur(0.15px);
-		/* Reset transform impacts so they don't crush into nothingness when past */
-		transform: perspective(1000px) translateZ(0) scale(1);
-	}
-
-	.lyric-line.secondary-line.past {
 		opacity: 0.2;
-		filter: blur(1.5px);
+		transform: scale(0.9);
 	}
 
-	/* 🎤 Fix #1: GPU-Driven Karaoke Motion */
+	/* Karaoke Fills */
 	.lyric-word {
-		position: relative;
 		display: inline-block;
-		color: var(--color-onSurfaceVariant, #555);
+		color: transparent;
+		background-color: var(--color-onSurfaceVariant, #555);
+		background-image: linear-gradient(var(--color-onSurface, #fff), var(--color-onSurface, #fff));
+		background-size: 0% 100%;
+		background-repeat: no-repeat;
+		
+		background-clip: text;
+		-webkit-background-clip: text;
+		
+		/* Smooths out the jumps between time update ticks */
+		transition: background-size 75ms linear;
+		will-change: background-size;
 	}
 
-	/* Replaces background-size jank with buttery scaleX */
-	.lyric-word::after {
-		content: attr(data-word);
-		position: absolute;
-		left: 0;
-		top: 0;
-		color: var(--color-onSurface, #fff);
-		overflow: hidden;
-		transform-origin: left center;
-		transform: scaleX(var(--word-progress-scale, 0));
-		/* Hard mask ensures sharp character cutting */
-		clip-path: inset(0 0 0 0);
-		will-change: transform;
-	}
-
-	/* Fallback for secondary-word without structural jank */
 	.lyric-word.secondary-word {
-		opacity: 0.78;
+		font-size: 0.8em;
+		opacity: 0.8;
 	}
-	
-	.lyric-word.secondary-word::after {
-		color: color-mix(in srgb, var(--primary-color) 35%, white 65%);
+
+	.lyric-line.active .lyric-word {
+		background-size: var(--word-progress, 0%) 100%;
+		-webkit-text-fill-color: transparent;
 	}
 
 	.skeleton {
