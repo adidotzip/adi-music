@@ -36,7 +36,12 @@ const config = {
 				],
 				'media-src': ['self', 'blob:'],
 				'font-src': ['self'],
-				'connect-src': ['self', env.PUBLIC_GOAT_COUNTER_URL ?? ''],
+				'connect-src': [
+					'self',
+					env.PUBLIC_GOAT_COUNTER_URL ?? '',
+					'https://lrclib.net',
+					'https://lyricsplus.prjktla.workers.dev',
+				],
 				'form-action': ['none'],
 				'manifest-src': ['self'],
 				'base-uri': ['none'],
