@@ -1,3 +1,4 @@
+import { getDatabase } from '$lib/db/database.ts'
 import { formatArtists, formatNameOrUnknown } from '$lib/helpers/utils/text.ts'
 import type { TrackData } from '$lib/library/get/value.ts'
 
@@ -398,17 +399,63 @@ const fetchLrclibLyrics = async (
 	}
 }
 
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7 // 1 week
+
+const getLyricsFromCache = async (trackId: number): Promise<SyncedLyricsResult | undefined> => {
+	try {
+		const db = await getDatabase()
+		const cached = await db.get('lyrics', trackId)
+		if (!cached) {
+			return undefined
+		}
+
+		if (Date.now() - cached.cachedAt > CACHE_TTL_MS) {
+			return undefined
+		}
+
+		return cached.data
+	} catch {
+		return undefined
+	}
+}
+
+const saveLyricsToCache = async (trackId: number, data: SyncedLyricsResult) => {
+	try {
+		const db = await getDatabase()
+		await db.put('lyrics', {
+			trackId,
+			data,
+			cachedAt: Date.now(),
+		})
+	} catch {
+		// Ignore
+	}
+}
+
 export const fetchSyncedLyrics = async (
 	track: TrackData,
 	signal: AbortSignal,
 ): Promise<SyncedLyricsResult> => {
+	const cachedResult = await getLyricsFromCache(track.id)
+	if (cachedResult) {
+		return cachedResult
+	}
+
 	try {
+		let result: SyncedLyricsResult = { status: 'not-found' }
+
 		const lyricsPlusLines = await fetchLyricsPlusLyrics(track, signal)
 		if (lyricsPlusLines.length > 0) {
-			return { status: 'found', source: 'lyricsplus', lines: lyricsPlusLines }
+			result = { status: 'found', source: 'lyricsplus', lines: lyricsPlusLines }
+		} else {
+			result = await fetchLrclibLyrics(track, signal)
 		}
 
-		return await fetchLrclibLyrics(track, signal)
+		if (result.status !== 'error') {
+			await saveLyricsToCache(track.id, result)
+		}
+
+		return result
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
 			throw error
