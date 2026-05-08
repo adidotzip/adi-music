@@ -35,7 +35,7 @@
 	}
 
 	let { track, currentTimeMs }: Props = $props()
-	const player = usePlayer()
+	const player = usePlayer() // Assuming this is globally available or imported in your real code
 
 	let result: SyncedLyricsResult | undefined = $state()
 	let loading = $state(false)
@@ -55,8 +55,7 @@
 
 	const getActiveWordIndex = (line: SyncedLyricsLine, timeMs: number): number => {
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
-			// 🔥 Fixed: Multiply seconds by 1000 to match timeMs!
-			if (timeMs >= line.words[i].time * 1000) {
+			if (timeMs >= line.words[i].time) {
 				return i
 			}
 		}
@@ -96,7 +95,7 @@
 		return () => controller.abort()
 	})
 
-	// Optimized Auto-scroll logic using requestAnimationFrame
+	// Material 3 Emphasized Scroll Logic
 	let animationFrameId: number | undefined
 
 	const scrollToActiveLine = (smooth = true) => {
@@ -117,7 +116,7 @@
 		if (smooth) {
 			const startScroll = scrollerElement.scrollTop
 			const distance = targetScroll - startScroll
-			const duration = 600
+			const duration = 750 // Slightly longer for M3 expressive settling
 			let startTime: number | null = null
 
 			const animate = (currentTime: number) => {
@@ -125,8 +124,9 @@
 				const timeElapsed = currentTime - startTime
 				const progress = Math.min(timeElapsed / duration, 1)
 
-				// Cubic ease-out
-				const ease = 1 - Math.pow(1 - progress, 3)
+				// Material 3 Emphasized Decelerate (Quartic Ease-Out Approximation)
+				// Fast out of the gate, long smooth settle.
+				const ease = 1 - Math.pow(1 - progress, 4)
 
 				if (scrollerElement && !isUserScrolling) {
 					scrollerElement.scrollTop = startScroll + distance * ease
@@ -162,7 +162,7 @@
 		clearTimeout(userScrollTimeout)
 		userScrollTimeout = window.setTimeout(() => {
 			isUserScrolling = false
-		}, 2500)
+		}, 3000) // Give them a bit more time before snapping back
 	}
 
 	const retry = () => {
@@ -182,35 +182,34 @@
 {/snippet}
 
 <section class="lyrics-shell card" aria-live="polite" style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-surfaceContainerLow)'}">
-	<div class="dynamic-background"></div>
+	<div class="m3-tonal-background"></div>
+	
 	{#if !track}
 		{@render emptyState('musicNote', m.lyricsNoTrack(), m.lyricsNoTrackExplanation())}
 	{:else if loading}
-		<div class="lyrics-header opacity-50">
+		<div class="lyrics-header">
 			<div class="min-w-0">
-				<div class="skeleton mb-2 h-6 w-32 rounded bg-surfaceContainerHighest"></div>
-				<div class="skeleton h-4 w-24 rounded bg-surfaceContainerHighest"></div>
+				<div class="skeleton mb-2 h-7 w-36 rounded-md bg-surfaceContainerHighest"></div>
+				<div class="skeleton h-5 w-28 rounded-md bg-surfaceContainerHighest opacity-70"></div>
 			</div>
 		</div>
 		<div class="lyrics-scroller overflow-hidden px-6 pt-12">
 			{#each Array(6) as _, i}
 				<div 
-					class="skeleton mb-8 h-12 rounded-lg bg-surfaceContainerHighest opacity-20"
-					style="width: {70 + Math.random() * 20}%;"
+					class="skeleton mb-10 h-14 rounded-xl bg-surfaceContainerHighest opacity-20"
+					style="width: {60 + Math.random() * 30}%;"
 				></div>
 			{/each}
 		</div>
 	{:else if result?.status === 'found'}
 		<div class="lyrics-header">
 			<div class="min-w-0" lang={getItemLanguage(track.language)}>
-				<div class="truncate text-title-md">{track.name}</div>
-				<div class="truncate text-body-sm text-onSecondaryContainer/72">
+				<div class="truncate text-title-lg font-bold tracking-tight text-onSurface">{track.name}</div>
+				<div class="truncate text-body-md font-medium text-onSurfaceVariant">
 					{formatArtists(track.artists)}
 				</div>
 			</div>
-			<div
-				class="source-badge rounded-full bg-surfaceContainerHighest px-3 py-1 text-label-sm text-onSurfaceVariant"
-			>
+			<div class="source-badge">
 				{sourceLabel}
 			</div>
 		</div>
@@ -238,8 +237,10 @@
 					{#each line.words as word, wordIndex}
 						{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
 						{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
+						{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
+						{@const duration = nextTime - word.time || 200}
 						{@const wordProgress = isCurrentWord 
-							? Math.min(Math.max((currentTimeMs - word.time * 1000) / 200, 0), 1) * 100 
+							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100 
 							: (isPastWord ? 100 : 0)}
 						
 						<span 
@@ -266,27 +267,26 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		max-height: 800px;
+		max-height: 850px;
 		position: relative;
 		overflow: hidden;
-		background: var(--color-surface);
+		background: var(--color-surface, #121212);
+		border-radius: 1.5rem; /* M3 Extra Large shape */
 	}
 
-	.dynamic-background {
+	.m3-tonal-background {
 		position: absolute;
 		inset: 0;
 		background: radial-gradient(
-			circle at 20% 30%,
-			var(--primary-color) 0%,
-			transparent 50%
+			ellipse at 0% 0%,
+			color-mix(in srgb, var(--primary-color) 25%, transparent) 0%,
+			transparent 60%
 		),
 		radial-gradient(
-			circle at 80% 70%,
-			var(--primary-color) 0%,
-			transparent 50%
+			ellipse at 100% 100%,
+			color-mix(in srgb, var(--primary-color) 20%, transparent) 0%,
+			transparent 60%
 		);
-		opacity: 0.15;
-		filter: blur(80px);
 		z-index: 0;
 		pointer-events: none;
 	}
@@ -295,20 +295,31 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 1rem 1.5rem;
+		padding: 1.25rem 1.75rem;
 		z-index: 10;
-		backdrop-filter: blur(20px);
-		-webkit-backdrop-filter: blur(20px);
-		background: var(--color-surfaceContainerLow, #1a1a1a) 80%;
-		border-bottom: 1px solid var(--color-outlineVariant, rgba(255, 255, 255, 0.1));
+		background: linear-gradient(
+			to bottom,
+			var(--color-surface, #121212) 60%,
+			transparent 100%
+		);
+	}
+
+	.source-badge {
+		background: var(--color-surfaceContainerHighest, #333);
+		color: var(--color-onSurfaceVariant, #ccc);
+		padding: 0.375rem 0.75rem;
+		border-radius: 0.5rem; /* M3 Small shape */
+		font-size: 0.75rem;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
 	}
 
 	.lyrics-scroller {
 		flex: 1;
 		overflow-y: auto;
-		padding: 0 1.5rem;
+		padding: 0 2rem;
 		scroll-behavior: smooth;
-		perspective: 1000px;
 		
 		scrollbar-width: none; 
 		-ms-overflow-style: none;
@@ -316,15 +327,15 @@
 		mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 10%, 
-			black 90%, 
+			black 15%, 
+			black 85%, 
 			transparent 100%
 		);
 		-webkit-mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 10%, 
-			black 90%, 
+			black 15%, 
+			black 85%, 
 			transparent 100%
 		);
 	}
@@ -334,10 +345,10 @@
 	}
 
 	.lyrics-spacer {
-		height: 45vh;
+		height: 40vh;
 	}
 
-	/* --- APPLE MUSIC STYLE TYPOGRAPHY & ANIMATIONS --- */
+	/* --- MATERIAL 3 EXPRESSIVE TYPOGRAPHY & MOTION --- */
 
 	.lyric-line {
 		display: block;
@@ -345,93 +356,95 @@
 		text-align: left;
 		background: transparent;
 		border: none;
-		padding: 1.25rem 0;
-		margin: 0.5rem 0;
-		font-size: 1.75rem;
-		@media (min-width: 640px) {
-			font-size: 2.25rem;
-		}
-		@media (min-width: 1024px) {
-			font-size: 2.75rem;
-		}
+		padding: 1rem 0;
+		margin: 0.75rem 0;
+		
+		/* M3 Display Typography */
+		font-family: var(--font-family-sans, system-ui, sans-serif);
+		font-size: 2rem;
+		@media (min-width: 640px) { font-size: 2.5rem; }
+		@media (min-width: 1024px) { font-size: 3rem; }
+		
 		font-weight: 700;
-		line-height: 1.15;
-		letter-spacing: -0.04em;
+		line-height: 1.2;
+		letter-spacing: -0.02em; /* Tighter for expressive headlines */
 		white-space: pre-wrap;
-		color: var(--color-onSurface, #ffffff);
-
-		opacity: 0.2;
-		transform: scale(0.95) rotateX(10deg);
+		
+		color: var(--color-onSurfaceVariant, #a0a0a0);
+		opacity: 0.4;
+		transform: scale(0.92) translateX(-1%);
 		transform-origin: center left;
 		cursor: pointer;
 
-		will-change: transform, opacity, filter;
+		will-change: transform, opacity, color;
 
+		/* M3 Emphasized Decelerate */
 		transition:
-			opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1),
-			transform 0.8s cubic-bezier(0.4, 0, 0.2, 1),
-			filter 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-		filter: blur(1.5px);
+			opacity 0.6s cubic-bezier(0.2, 0, 0, 1),
+			transform 0.6s cubic-bezier(0.2, 0, 0, 1),
+			color 0.6s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.lyric-line:hover {
-		opacity: 0.5;
+		opacity: 0.7;
 	}
 
 	.lyric-line.active {
+		color: var(--color-onSurface, #ffffff);
 		opacity: 1;
-		transform: scale(1.05) rotateX(0deg);
-		filter: blur(0);
+		transform: scale(1) translateX(0);
+		font-weight: 800; /* Extra punch for active line */
 	}
 
-	/* Cleaned up specificity & added butter-smooth word transitions */
 	.lyric-word {
 		display: inline-block;
-		opacity: 0.3;
-		transition:
-			opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-			transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-			filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		filter: blur(1px);
+		color: transparent;
+		/* Base state is the inactive color */
+		background: var(--color-onSurfaceVariant, #a0a0a0);
+		background-clip: text;
+		-webkit-background-clip: text;
+		
+		transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.lyric-line.active .lyric-word {
+		/* When active, map the progress gradient */
 		background: linear-gradient(
 			to right,
-			var(--color-onSurface, #ffffff) 0%,
-			var(--color-onSurface, #ffffff) var(--word-progress, 0%),
-			rgba(255, 255, 255, 0.3) var(--word-progress, 0%)
+			var(--color-primary, #d0bcff) 0%,
+			var(--color-primary, #d0bcff) var(--word-progress, 0%),
+			var(--color-onSurfaceVariant, #a0a0a0) var(--word-progress, 0%)
 		);
 		background-size: 100% 100%;
-		background-repeat: no-repeat;
-		-webkit-background-clip: text;
 		background-clip: text;
+		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
-		opacity: 1;
-		filter: none;
-		transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	}
 
 	.lyric-line.active .lyric-word.active-word {
-		transform: scale(1.05);
-		filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+		/* Subtle pop for the exact word being sung */
+		transform: scale(1.02) translateY(-2px);
 	}
 
 	.lyric-line.past {
-		opacity: 0.15;
-		filter: blur(1px);
+		opacity: 0.25;
+		transform: scale(0.92) translateX(0);
 	}
 
+	/* M3 Standard Skeleton Loader */
 	.skeleton {
-		animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+		animation: m3-shimmer 2s infinite linear;
+		background: linear-gradient(
+			90deg,
+			var(--color-surfaceContainerHighest, #333) 0%,
+			var(--color-surfaceContainer, #444) 50%,
+			var(--color-surfaceContainerHighest, #333) 100%
+		);
+		background-size: 200% 100%;
 	}
 
-	@keyframes pulse {
-		0%, 100% {
-			opacity: 0.2;
-		}
-		50% {
-			opacity: 0.4;
-		}
+	@keyframes m3-shimmer {
+		0% { background-position: -200% 0; }
+		100% { background-position: 200% 0; }
 	}
 </style>
