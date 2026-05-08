@@ -92,7 +92,7 @@
 		return () => controller.abort()
 	})
 
-	// Scroll Animation Logic
+	// M3 Expressive Scroll Animation Logic
 	let animationFrameId: number | undefined
 
 	const scrollToActiveLine = (smooth = true) => {
@@ -113,16 +113,19 @@
 		if (smooth) {
 			const startScroll = scrollerElement.scrollTop
 			const distance = targetScroll - startScroll
-			const duration = 800 
+			const duration = 900 // Slightly longer for the bounce to resolve 
 			let startTime: number | null = null
 
 			const animate = (currentTime: number) => {
 				if (!startTime) startTime = currentTime
 				const timeElapsed = currentTime - startTime
-				const progress = Math.min(timeElapsed / duration, 1)
+				let progress = Math.min(timeElapsed / duration, 1)
 
-				// Expo ease-out
-				const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress)
+				// M3 Expressive Spring/Back Ease-Out
+				// Overshoots slightly before settling into place
+				const tension = 1.2;
+				const p = progress - 1;
+				const ease = progress === 1 ? 1 : 1 + p * p * ((tension + 1) * p + tension);
 
 				if (scrollerElement && !isUserScrolling) {
 					scrollerElement.scrollTop = startScroll + distance * ease
@@ -164,7 +167,6 @@
 		isUserScrolling = true
 		if (userScrollTimeout) clearTimeout(userScrollTimeout)
 		
-		// Longer timeout (8s) before auto-resuming, giving the user time to read
 		userScrollTimeout = window.setTimeout(() => {
 			resumeSync()
 		}, 8000) 
@@ -267,7 +269,6 @@
 			<div class="lyrics-spacer"></div>
 		</div>
 
-		<!-- Resume Sync FAB -->
 		<button 
 			class="resume-sync-fab" 
 			class:visible={isUserScrolling}
@@ -382,7 +383,7 @@
 		height: 40vh;
 	}
 
-	/* --- MATERIAL 3 EXPRESSIVE TYPOGRAPHY & MOTION --- */
+	/* --- M3 EXPRESSIVE BOUNCE TYPOGRAPHY --- */
 
 	.lyric-line {
 		display: block;
@@ -405,22 +406,24 @@
 		
 		color: var(--color-onSurfaceVariant, #a0a0a0);
 		opacity: 0.4;
-		filter: blur(1px); /* Kept minimal for performance */
-		transform: scale(0.95) translateY(5px);
+		filter: blur(1px);
+		transform: scale(0.95) translateY(12px);
 		transform-origin: center left;
 		cursor: pointer;
 
 		will-change: transform, opacity, color;
 
+		/* The M3 "Expressive" Spatial Bounce Curve */
 		transition:
-			opacity 0.6s cubic-bezier(0.2, 0, 0, 1),
-			transform 0.6s cubic-bezier(0.2, 0, 0, 1),
-			filter 0.6s cubic-bezier(0.2, 0, 0, 1);
+			opacity 0.7s cubic-bezier(0.2, 0, 0, 1),
+			transform 0.8s cubic-bezier(0.34, 1.4, 0.64, 1),
+			filter 0.7s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.lyric-line:hover {
 		opacity: 0.7;
 		filter: blur(0px);
+		transform: scale(0.97) translateY(6px);
 	}
 
 	.lyric-line.active {
@@ -435,10 +438,10 @@
 	.lyric-line.past {
 		opacity: 0.2;
 		filter: blur(2px);
-		transform: scale(0.92) translateY(-5px);
+		transform: scale(0.92) translateY(-12px);
 	}
 
-	/* Word Level Animations */
+	/* Word Level Playful Animations */
 	.lyric-word {
 		display: inline-block;
 		color: transparent;
@@ -446,11 +449,12 @@
 		background-clip: text;
 		-webkit-background-clip: text;
 		transform-origin: bottom center;
-		transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+		
+		/* Spring curve for individual words */
+		transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
 	.lyric-line.active .lyric-word {
-		/* Added a 5% feathering between the colors for a smoother gradient paint */
 		background: linear-gradient(
 			to right,
 			var(--color-onSurface, #fff) 0%,
@@ -465,8 +469,8 @@
 	}
 
 	.lyric-line.active .lyric-word.active-word {
-		/* Subtler karaoke bounce */
-		transform: translateY(-2px) scale(1.02);
+		/* Snappy Karaoke Pop & Tilt */
+		transform: translateY(-6px) scale(1.08) rotate(-1deg);
 	}
 
 	/* Resume Sync FAB */
@@ -483,14 +487,16 @@
 		border-radius: 999px;
 		font-weight: 600;
 		font-size: 0.875rem;
-		box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+		box-shadow: 0 8px 20px rgba(0,0,0,0.4);
 		border: 1px solid color-mix(in srgb, var(--color-onSurface) 10%, transparent);
 		z-index: 20;
 		cursor: pointer;
 		opacity: 0;
-		transform: translateY(20px) scale(0.9);
+		transform: translateY(24px) scale(0.9);
 		pointer-events: none;
-		transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+		
+		/* Emphasized Decelerate */
+		transition: all 0.5s cubic-bezier(0.05, 0.7, 0.1, 1);
 	}
 
 	.resume-sync-fab.visible {
@@ -501,7 +507,7 @@
 
 	.resume-sync-fab:hover {
 		background: var(--color-surfaceContainerHighest, #333);
-		transform: translateY(-2px) scale(1.02);
+		transform: translateY(-4px) scale(1.05);
 	}
 
 	/* Skeleton Loaders */
