@@ -10,7 +10,7 @@
 			if (currentTimeMs >= lines[i].startTime) {
 				index = i
 			} else {
-				break // Since lines are sorted, we can stop early
+				break
 			}
 		}
 		return index
@@ -46,11 +46,10 @@
 	const lines = $derived(foundResult?.lines ?? [])
 	const activeLineIndex = $derived(getActiveLineIndex(lines, currentTimeMs))
 	const sourceLabel = $derived(
-	foundResult?.source === 'lyricsplus' ? 'LyricsPlus' : 'LRCLIB',
-)
+		foundResult?.source === 'lyricsplus' ? 'LyricsPlus' : 'LRCLIB',
+	)
 
 	const getActiveWordIndex = (line: SyncedLyricsLine): number => {
-		// Optimization: Find index using reverse loop or findLastIndex
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
 			if (currentTimeMs >= line.words[i].time) {
 				return i
@@ -68,7 +67,6 @@
 		}
 
 		const requestedReloadCount = reloadCount
-
 		const controller = new AbortController()
 		loading = true
 
@@ -115,7 +113,7 @@
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
-	<div class="m-auto flex max-w-80 flex-col items-center text-center">
+	<div class="empty-state m-auto flex max-w-80 flex-col items-center text-center">
 		<Icon type={icon} class="color-onSecondaryContainer mb-4 size-24 opacity-54" />
 		<div class="text-title-md">{title}</div>
 		<div class="mt-2 text-body-md text-onSecondaryContainer/72">{description}</div>
@@ -142,7 +140,7 @@
 				</div>
 			</div>
 			<div
-				class="rounded-full bg-surfaceContainerHighest px-3 py-1 text-label-sm text-onSurfaceVariant"
+				class="source-badge rounded-full bg-surfaceContainerHighest px-3 py-1 text-label-sm text-onSurfaceVariant"
 			>
 				{sourceLabel}
 			</div>
@@ -163,9 +161,10 @@
 					onclick={() => player.seek(line.startTime / 1000)}
 				>
 					{#each line.words as word, wordIndex}
-						<span class="lyric-word" class:active-word={isActiveLine && wordIndex <= activeWordIdx}>
-							{word.string}
-						</span>
+						<span 
+							class="lyric-word" 
+							class:active-word={isActiveLine && wordIndex <= activeWordIdx}
+						>{word.string}</span>
 					{/each}
 				</button>
 			{/each}
@@ -181,16 +180,120 @@
 </section>
 
 <style lang="postcss">
-	/* Styles remain largely the same, but ensure active-word logic is clear */
-	.lyric-word {
-		transition: color 200ms ease;
+	.lyrics-shell {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		max-height: 800px; /* Adjust based on your layout */
+		position: relative;
+		overflow: hidden;
 	}
 
-	.active .lyric-word.active-word {
-		background: linear-gradient(90deg, var(--color-primary), var(--color-tertiary));
+	.lyrics-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 1rem;
+		z-index: 10;
+		background: linear-gradient(to bottom, var(--color-surface, #121212) 60%, transparent);
+	}
+
+	.lyrics-scroller {
+		flex: 1;
+		overflow-y: auto;
+		padding: 0 1.5rem;
+		scroll-behavior: smooth;
+		
+		/* Hides scrollbar for a cleaner Apple-like UI */
+		scrollbar-width: none; 
+		-ms-overflow-style: none;
+		
+		/* Smooth fade mask at the top and bottom edges */
+		mask-image: linear-gradient(
+			to bottom, 
+			transparent 0%, 
+			black 10%, 
+			black 90%, 
+			transparent 100%
+		);
+		-webkit-mask-image: linear-gradient(
+			to bottom, 
+			transparent 0%, 
+			black 10%, 
+			black 90%, 
+			transparent 100%
+		);
+	}
+
+	.lyrics-scroller::-webkit-scrollbar {
+		display: none;
+	}
+
+	/* Ensures the first and last lines can perfectly hit the center of the scroll view */
+	.lyrics-spacer {
+		height: 45vh; 
+	}
+
+	/* --- APPLE MUSIC STYLE TYPOGRAPHY & ANIMATIONS --- */
+	
+	.lyric-line {
+		display: block;
+		width: 100%;
+		text-align: left;
+		background: transparent;
+		border: none;
+		padding: 1rem 0;
+		margin: 0;
+		font-size: 2rem;
+		font-weight: 700;
+		line-height: 1.2;
+		letter-spacing: -0.03em;
+		white-space: pre-wrap;
+		color: var(--color-onSurface, #ffffff);
+		
+		/* Inactive state (dimmed, scaled down, slightly blurred) */
+		opacity: 0.25;
+		transform: scale(0.95);
+		transform-origin: left center;
+		filter: blur(1.5px);
+		cursor: pointer;
+		
+		/* Apple's signature springy transition */
+		transition: opacity 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
+					transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
+					filter 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+
+	.lyric-line:hover {
+		opacity: 0.5;
+	}
+
+	/* Active Line gets full emphasis */
+	.lyric-line.active {
+		opacity: 1;
+		transform: scale(1);
+		filter: blur(0);
+	}
+
+	/* Karaoke Word Highlighting */
+	.lyric-word {
+		display: inline-block;
+		transition: opacity 0.2s ease, text-shadow 0.2s ease, color 0.2s ease;
+	}
+
+	/* Words in the currently active line are dimmed until they are sung */
+	.lyric-line.active .lyric-word {
+		opacity: 0.4;
+	}
+
+	/* Sung words glow brightly */
+	.lyric-line.active .lyric-word.active-word {
+		opacity: 1;
+		text-shadow: 0 0 20px var(--alpha(var(--color-onSurface) / 30%));
+		
+		/* Optional: If you want a gradient fill instead of solid text */
+		/* background: linear-gradient(90deg, var(--color-primary), var(--color-tertiary));
 		background-clip: text;
-		-webkit-text-fill-color: transparent;
-		/* Adds a "glow" to the currently singing word */
-		text-shadow: 0 0 15px var(--alpha(var(--color-primary) / 30%));
+		-webkit-text-fill-color: transparent; */
 	}
 </style>
