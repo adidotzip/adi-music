@@ -113,16 +113,15 @@
 		if (smooth) {
 			const startScroll = scrollerElement.scrollTop
 			const distance = targetScroll - startScroll
-			const duration = 900 // Slightly longer for the bounce to resolve 
+			const duration = 900 
 			let startTime: number | null = null
 
-			const animate = (currentTime: number) => {
-				if (!startTime) startTime = currentTime
-				const timeElapsed = currentTime - startTime
+			const animate = (timestamp: DOMHighResTimeStamp) => {
+				if (!startTime) startTime = timestamp
+				const timeElapsed = timestamp - startTime
 				let progress = Math.min(timeElapsed / duration, 1)
 
 				// M3 Expressive Spring/Back Ease-Out
-				// Overshoots slightly before settling into place
 				const tension = 1.2;
 				const p = progress - 1;
 				const ease = progress === 1 ? 1 : 1 + p * p * ((tension + 1) * p + tension);
@@ -178,7 +177,7 @@
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
-	<div class="empty-state m-auto flex max-w-80 flex-col items-center text-center z-10">
+	<div class="empty-state z-10 m-auto flex max-w-80 flex-col items-center text-center">
 		<Icon type={icon} class="color-onSecondaryContainer mb-4 size-24 opacity-54" />
 		<div class="text-title-md font-bold">{title}</div>
 		<div class="mt-2 text-body-md text-onSecondaryContainer/72">{description}</div>
@@ -200,14 +199,14 @@
 	{:else if loading}
 		<div class="lyrics-header">
 			<div class="min-w-0">
-				<div class="skeleton mb-2 h-7 w-36 rounded-md bg-surfaceContainerHighest"></div>
-				<div class="skeleton h-5 w-28 rounded-md bg-surfaceContainerHighest opacity-70"></div>
+				<div class="skeleton bg-surfaceContainerHighest mb-2 h-7 w-36 rounded-md"></div>
+				<div class="skeleton bg-surfaceContainerHighest h-5 w-28 rounded-md opacity-70"></div>
 			</div>
 		</div>
 		<div class="lyrics-scroller overflow-hidden px-6 pt-12">
 			{#each Array(6) as _, i}
 				<div 
-					class="skeleton mb-10 h-14 rounded-xl bg-surfaceContainerHighest opacity-20"
+					class="skeleton bg-surfaceContainerHighest mb-10 h-14 rounded-xl opacity-20"
 					style="width: {60 + Math.random() * 30}%; transform: translateX({i % 2 === 0 ? '0' : '5%'})"
 				></div>
 			{/each}
@@ -215,8 +214,8 @@
 	{:else if result?.status === 'found'}
 		<div class="lyrics-header">
 			<div class="min-w-0" lang={getItemLanguage(track.language)}>
-				<div class="truncate text-title-lg font-bold tracking-tight text-onSurface">{track.name}</div>
-				<div class="truncate text-body-md font-medium text-onSurfaceVariant">
+				<div class="text-onSurface truncate text-title-lg font-bold tracking-tight">{track.name}</div>
+				<div class="text-onSurfaceVariant truncate text-body-md font-medium">
 					{formatArtists(track.artists)}
 				</div>
 			</div>
@@ -253,7 +252,7 @@
 						{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
 						{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
 						{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
-						{@const duration = nextTime - word.time || 200}
+						{@const duration = Math.max(nextTime - word.time, 1)}
 						{@const wordProgress = isCurrentWord 
 							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100 
 							: (isPastWord ? 100 : 0)}
@@ -317,6 +316,7 @@
 		pointer-events: none;
 		transition: background 1.5s ease;
 		animation: pulse-glow 8s infinite alternate ease-in-out;
+		will-change: opacity, transform; /* GPU Optimization */
 	}
 
 	@keyframes pulse-glow {
@@ -373,6 +373,7 @@
 			black 85%, 
 			transparent 100%
 		);
+		will-change: scroll-position;
 	}
 
 	.lyrics-scroller::-webkit-scrollbar {
@@ -403,15 +404,17 @@
 		line-height: 1.2;
 		letter-spacing: -0.02em;
 		white-space: pre-wrap;
+		user-select: none; /* Prevents sticky highlighting on drag */
 		
 		color: var(--color-onSurfaceVariant, #a0a0a0);
 		opacity: 0.4;
 		filter: blur(1px);
-		transform: scale(0.95) translateY(12px);
+		/* Switched to translate3d for hardware acceleration */
+		transform: scale(0.95) translate3d(0, 12px, 0); 
 		transform-origin: center left;
 		cursor: pointer;
 
-		will-change: transform, opacity, color;
+		will-change: transform, opacity, filter;
 
 		/* The M3 "Expressive" Spatial Bounce Curve */
 		transition:
@@ -423,14 +426,14 @@
 	.lyric-line:hover {
 		opacity: 0.7;
 		filter: blur(0px);
-		transform: scale(0.97) translateY(6px);
+		transform: scale(0.97) translate3d(0, 6px, 0);
 	}
 
 	.lyric-line.active {
 		color: var(--color-onSurface, #ffffff);
 		opacity: 1;
 		filter: blur(0px);
-		transform: scale(1.05) translateY(0);
+		transform: scale(1.05) translate3d(0, 0, 0);
 		font-weight: 800;
 		text-shadow: 0 4px 24px color-mix(in srgb, var(--primary-color) 40%, transparent);
 	}
@@ -438,39 +441,35 @@
 	.lyric-line.past {
 		opacity: 0.2;
 		filter: blur(2px);
-		transform: scale(0.92) translateY(-12px);
+		transform: scale(0.92) translate3d(0, -12px, 0);
 	}
 
 	/* Word Level Playful Animations */
 	.lyric-word {
 		display: inline-block;
 		color: transparent;
-		background: var(--color-onSurfaceVariant, #666);
+		/* Much more performant than generating linear gradients per-frame: */
+		background-color: var(--color-onSurfaceVariant, #666);
+		background-image: linear-gradient(var(--color-onSurface, #fff), var(--color-onSurface, #fff));
+		background-size: 0% 100%;
+		background-repeat: no-repeat;
+		
 		background-clip: text;
 		-webkit-background-clip: text;
 		transform-origin: bottom center;
 		
-		/* Spring curve for individual words */
 		transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
 	.lyric-line.active .lyric-word {
-		background: linear-gradient(
-			to right,
-			var(--color-onSurface, #fff) 0%,
-			var(--color-onSurface, #fff) calc(var(--word-progress, 0%) - 5%),
-			var(--color-onSurfaceVariant, #666) calc(var(--word-progress, 0%) + 5%),
-			var(--color-onSurfaceVariant, #666) 100%
-		);
-		background-size: 100% 100%;
-		background-clip: text;
-		-webkit-background-clip: text;
+		/* Simply update the size instead of building new gradient stops */
+		background-size: var(--word-progress, 0%) 100%;
 		-webkit-text-fill-color: transparent;
 	}
 
 	.lyric-line.active .lyric-word.active-word {
 		/* Snappy Karaoke Pop & Tilt */
-		transform: translateY(-6px) scale(1.08) rotate(-1deg);
+		transform: translate3d(0, -6px, 0) scale(1.08) rotate(-1deg);
 	}
 
 	/* Resume Sync FAB */
@@ -492,7 +491,7 @@
 		z-index: 20;
 		cursor: pointer;
 		opacity: 0;
-		transform: translateY(24px) scale(0.9);
+		transform: translate3d(0, 24px, 0) scale(0.9);
 		pointer-events: none;
 		
 		/* Emphasized Decelerate */
@@ -501,13 +500,13 @@
 
 	.resume-sync-fab.visible {
 		opacity: 1;
-		transform: translateY(0) scale(1);
+		transform: translate3d(0, 0, 0) scale(1);
 		pointer-events: auto;
 	}
 
 	.resume-sync-fab:hover {
 		background: var(--color-surfaceContainerHighest, #333);
-		transform: translateY(-4px) scale(1.05);
+		transform: translate3d(0, -4px, 0) scale(1.05);
 	}
 
 	/* Skeleton Loaders */
