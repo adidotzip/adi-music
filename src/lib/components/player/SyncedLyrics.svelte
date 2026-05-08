@@ -404,6 +404,10 @@
 		
 		background-clip: text;
 		-webkit-background-clip: text;
+		
+		/* Smooths out the jumps between time update ticks */
+		transition: background-size 75ms linear;
+		will-change: background-size;
 	}
 
 	.lyric-word.secondary-word {
