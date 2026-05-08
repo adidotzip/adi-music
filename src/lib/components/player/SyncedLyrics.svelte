@@ -42,7 +42,7 @@
 	let scrollerElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
 	let isUserScrolling = $state(false)
-	let isProgrammaticScroll = false
+	let lastProgrammaticScrollTime = 0
 	let userScrollTimeout: ReturnType<typeof setTimeout>
 	
 	let previousActiveIndex = -1
@@ -138,7 +138,7 @@
 			scrollerElement.offsetHeight / 2 +
 			activeEl.offsetHeight / 2
 
-		isProgrammaticScroll = true
+		lastProgrammaticScrollTime = Date.now()
 		scrollerElement.scrollTo({
 			top: targetScroll,
 			behavior: smooth ? 'smooth' : 'auto'
@@ -159,8 +159,9 @@
 	}
 
 	const handleScroll = () => {
-		if (isProgrammaticScroll) {
-			isProgrammaticScroll = false
+		// Ignore scroll events for a short duration after a programmatic scroll starts
+		// Smooth scrolling can emit multiple scroll events over several hundred ms.
+		if (Date.now() - lastProgrammaticScrollTime < 1000) {
 			return
 		}
 
@@ -400,7 +401,7 @@
 		user-select: none; 
 		
 		color: var(--color-onSurfaceVariant);
-		opacity: calc(0.3 / (1 + var(--distance) * 0.2));
+		opacity: calc(0.5 / (1 + var(--distance) * 0.15));
 		transform: scale(calc(1 - var(--distance) * 0.025));
 		transform-origin: center;
 		cursor: pointer;
@@ -447,14 +448,10 @@
 	/* Karaoke Fills */
 	.lyric-word {
 		display: inline-block;
-		color: transparent;
-		background-color: var(--color-onSurfaceVariant);
+		color: inherit;
 		background-image: linear-gradient(var(--color-onSurface), var(--color-onSurface));
 		background-size: 0% 100%;
 		background-repeat: no-repeat;
-		
-		background-clip: text;
-		-webkit-background-clip: text;
 		
 		transition: background-size 100ms linear;
 		will-change: background-size;
@@ -466,7 +463,11 @@
 	}
 
 	.lyric-line.active .lyric-word {
+		color: transparent;
+		background-clip: text;
+		-webkit-background-clip: text;
 		background-size: var(--word-progress, 0%) 100%;
+		background-color: var(--color-onSurfaceVariant);
 		-webkit-text-fill-color: transparent;
 	}
 
