@@ -18,6 +18,7 @@
 </script>
 
 <script lang="ts">
+	import { Spring } from 'svelte/motion'
 	import Button from '$lib/components/Button.svelte'
 	import Icon from '$lib/components/icon/Icon.svelte'
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
@@ -35,6 +36,7 @@
 
 	let { track, currentTimeMs }: Props = $props()
 	const player = usePlayer()
+	const mainStore = useMainStore()
 
 	let result: SyncedLyricsResult | undefined = $state()
 	let loading = $state(false)
@@ -42,6 +44,12 @@
 	let reloadCount = $state(0)
 	
 	let previousActiveIndex = -1
+	let isUserScrolling = $state(false)
+
+	const scrollSpring = new Spring(0, {
+		stiffness: 0.1,
+		damping: 0.4
+	})
 
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
@@ -94,9 +102,11 @@
 		if (!track) {
 			result = undefined
 			loading = false
+			isUserScrolling = false
 			return
 		}
 
+		isUserScrolling = false
 		const requestedReloadCount = reloadCount
 		const controller = new AbortController()
 		loading = true
@@ -122,7 +132,7 @@
 
 	// Premium hardware-accelerated smooth scrolling
 	const scrollToActiveLine = (smooth = true) => {
-		if (!scrollerElement || activeLineIndex < 0) return
+		if (!scrollerElement || activeLineIndex < 0 || isUserScrolling) return
 
 		const activeEl = scrollerElement.querySelector<HTMLElement>(
 			`[data-line-index="${activeLineIndex}"]`,
@@ -134,11 +144,19 @@
 			scrollerElement.clientHeight / 2 +
 			activeEl.clientHeight / 2
 
-		scrollerElement.scrollTo({
-			top: targetScroll,
-			behavior: smooth ? 'smooth' : 'auto'
-		})
+		if (mainStore.isReducedMotion || !smooth) {
+			scrollerElement.scrollTo({ top: targetScroll, behavior: 'auto' })
+			scrollSpring.set(targetScroll, { hard: true })
+		} else {
+			scrollSpring.target = targetScroll
+		}
 	}
+
+	$effect(() => {
+		if (scrollerElement && !isUserScrolling) {
+			scrollerElement.scrollTop = scrollSpring.current
+		}
+	})
 
 	$effect(() => {
 		if (activeLineIndex !== previousActiveIndex) {
@@ -147,6 +165,15 @@
 		}
 	})
 
+	const handleManualScroll = () => {
+		isUserScrolling = true
+	}
+
+	const resumeAutoScroll = () => {
+		isUserScrolling = false
+		scrollToActiveLine(true)
+	}
+
 	const retry = () => {
 		reloadCount += 1
 	}
@@ -154,19 +181,23 @@
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
 	<div class="empty-state z-10 m-auto flex max-w-80 flex-col items-center text-center">
-		<Icon type={icon} class="color-onSecondaryContainer mb-4 size-24 opacity-54" />
-		<div class="text-title-md font-bold">{title}</div>
-		<div class="mt-2 text-body-md text-onSecondaryContainer/72">{description}</div>
+		<div class="mb-6 flex size-24 items-center justify-center rounded-3xl bg-secondaryContainer text-onSecondaryContainer">
+			<Icon type={icon} class="size-12 opacity-54" />
+		</div>
+		<div class="text-headline-sm font-bold tracking-tight">{title}</div>
+		<div class="mt-3 text-body-lg text-onSurfaceVariant/80">{description}</div>
 		{#if icon === 'alertCircle'}
-			<Button kind="outlined" class="mt-6" onclick={retry}>Reload</Button>
+			<Button kind="filled" class="mt-8 rounded-full px-8" onclick={retry}>
+				{m.retry?.() ?? 'Try Again'}
+			</Button>
 		{/if}
 	</div>
 {/snippet}
 
 <section 
-	class="lyrics-shell card" 
+	class="lyrics-shell"
 	aria-live="polite" 
-	style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary, #D0BCFF)'}"
+	style="--track-primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary)'}"
 >
 	<div class="ambient-glow-background"></div>
 	
@@ -175,15 +206,15 @@
 	{:else if loading}
 		<div class="lyrics-header">
 			<div class="min-w-0">
-				<div class="skeleton bg-surfaceContainerHighest mb-2 h-7 w-36 rounded-md"></div>
-				<div class="skeleton bg-surfaceContainerHighest h-5 w-28 rounded-md opacity-70"></div>
+				<div class="skeleton mb-2 h-7 w-48 rounded-lg opacity-40"></div>
+				<div class="skeleton h-5 w-32 rounded-md opacity-20"></div>
 			</div>
 		</div>
-		<div class="lyrics-scroller overflow-hidden px-6 pt-12">
-			{#each Array(6) as _, i}
+		<div class="lyrics-scroller overflow-hidden px-10 pt-12">
+			{#each [75, 60, 85, 70, 90, 65, 80, 55] as width, i}
 				<div 
-					class="skeleton bg-surfaceContainerHighest mb-10 h-14 rounded-xl opacity-20"
-					style="width: {60 + Math.random() * 30}%; transform: translateX({i % 2 === 0 ? '0' : '5%'})"
+					class="skeleton mb-12 h-16 rounded-2xl"
+					style="width: {width}%; opacity: {0.3 - (i * 0.03)};"
 				></div>
 			{/each}
 		</div>
@@ -197,89 +228,114 @@
 			</div>
 		</div>
 
-		<div class="lyrics-scroller" bind:this={scrollerElement}>
+		<div
+			class="lyrics-scroller"
+			bind:this={scrollerElement}
+			onwheel={handleManualScroll}
+			ontouchstart={handleManualScroll}
+			role="region"
+			aria-label={m.lyrics?.() ?? 'Lyrics'}
+		>
 			<div class="lyrics-spacer"></div>
 			{#each processedLines as line, lineIndex (lineIndex)}
 				{@const isActiveLine = lineIndex === activeLineIndex}
-				{@const activeWordIdx = getActiveWordIndex(line, currentTimeMs)}
+				{@const isPastLine = lineIndex < activeLineIndex}
+				{@const distance = Math.abs(lineIndex - activeLineIndex)}
 
 				<button
 					type="button"
 					class="lyric-line interactable"
 					class:active={isActiveLine}
-					class:past={lineIndex < activeLineIndex}
+					class:past={isPastLine}
 					class:secondary-line={line.isSecondaryLine}
 					data-line-index={lineIndex}
+					style="--line-distance: {distance}"
 					onclick={() => {
 						player.seek(line.startTime / 1000);
+						resumeAutoScroll();
 					}}
 				>
-					{#each line.words as word, wordIndex}
-						{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
-						{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
-						{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
-						{@const duration = Math.max(nextTime - word.time, 1)}
-						{@const wordProgress = isCurrentWord 
-							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100 
-							: (isPastWord ? 100 : 0)}
-						
-						<span 
-							class="lyric-word" 
-							class:active-word={isCurrentWord}
-							class:secondary-word={word.isSecondary && !line.isSecondaryLine}
-							style="--word-progress: {wordProgress}%"
-						>{word.string}</span>{' '}
-					{/each}
+					{#if isActiveLine}
+						{@const activeWordIdx = getActiveWordIndex(line, currentTimeMs)}
+						{#each line.words as word, wordIndex}
+							{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
+							{@const duration = Math.max(nextTime - word.time, 1)}
+							{@const isPastWord = wordIndex < activeWordIdx}
+							{@const isCurrentWord = wordIndex === activeWordIdx}
+							{@const wordProgress = isCurrentWord
+								? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100
+								: (isPastWord ? 100 : 0)}
+
+							<span
+								class="lyric-word"
+								class:secondary-word={word.isSecondary && !line.isSecondaryLine}
+								style="--word-progress: {wordProgress}%"
+							>{word.string}</span>{' '}
+						{/each}
+					{:else}
+						{#each line.words as word}
+							<span
+								class="lyric-word"
+								class:secondary-word={word.isSecondary && !line.isSecondaryLine}
+								style="--word-progress: {isPastLine ? '100%' : '0%'}"
+							>{word.string}</span>{' '}
+						{/each}
+					{/if}
 				</button>
 			{/each}
 			<div class="lyrics-spacer"></div>
 		</div>
+
+		{#if isUserScrolling}
+			<div class="lyrics-controls">
+				<Button
+					kind="filled"
+					class="rounded-full shadow-lg"
+					onclick={resumeAutoScroll}
+				>
+					<Icon type="chevronDown" class="mr-2 size-5" />
+					Return to current line
+				</Button>
+			</div>
+		{/if}
 	{:else if result?.status === 'instrumental'}
 		{@render emptyState('musicNote', 'Instrumental', 'This track is instrumental.')}
 	{:else if result?.status === 'not-found'}
-		{@render emptyState('musicNote', 'Not Found', 'Could not find lyrics for this track.')}
+		{@render emptyState('musicNote', 'No lyrics available', 'We couldn’t find lyrics for this track.')}
 	{:else}
-		{@render emptyState('alertCircle', 'Failed', 'Failed to load lyrics.')}
+		{@render emptyState('alertCircle', 'Something went wrong', 'Failed to load lyrics. Please try again.')}
 	{/if}
 </section>
 
 <style lang="postcss">
+	@reference "../../../app.css";
+
 	.lyrics-shell {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		max-height: 850px;
 		position: relative;
 		overflow: hidden;
-		background: var(--color-surface, #000000); 
-		border-radius: 1.75rem; 
-		box-shadow: 0 12px 48px rgba(0,0,0,0.4);
+		background: var(--color-surface);
+		border-radius: var(--radius-3xl);
 	}
 
 	.ambient-glow-background {
 		position: absolute;
 		inset: 0;
 		background: radial-gradient(
-			100% 100% at 50% -10%,
-			color-mix(in srgb, var(--primary-color) 25%, transparent) 0%,
+			120% 120% at 50% 0%,
+			color-mix(in srgb, var(--track-primary-color) 15%, transparent) 0%,
 			transparent 80%
 		),
 		radial-gradient(
-			80% 120% at 50% 120%,
-			color-mix(in srgb, var(--primary-color) 15%, transparent) 0%,
+			100% 100% at 80% 100%,
+			color-mix(in srgb, var(--track-primary-color) 10%, transparent) 0%,
 			transparent 100%
 		);
-		filter: blur(40px); 
 		z-index: 0;
 		pointer-events: none;
-		transition: background 1.5s ease;
-		animation: subtle-drift 12s infinite alternate ease-in-out;
-		will-change: opacity, transform;
-	}
-
-	@keyframes subtle-drift {
-		0% { opacity: 0.8; transform: scale(1); }
-		100% { opacity: 1; transform: scale(1.05); }
+		transition: background 1.5s var(--ease-standard);
 	}
 
 	.lyrics-header {
@@ -290,9 +346,11 @@
 		z-index: 10;
 		background: linear-gradient(
 			to bottom,
-			color-mix(in srgb, var(--color-surface, #000) 90%, transparent) 20%,
+			var(--color-surface) 0%,
+			color-mix(in srgb, var(--color-surface) 80%, transparent) 50%,
 			transparent 100%
 		);
+		backdrop-filter: blur(8px);
 	}
 
 	.lyrics-scroller {
@@ -311,13 +369,6 @@
 			black 85%, 
 			transparent 100%
 		);
-		-webkit-mask-image: linear-gradient(
-			to bottom, 
-			transparent 0%, 
-			black 15%, 
-			black 85%, 
-			transparent 100%
-		);
 	}
 
 	.lyrics-scroller::-webkit-scrollbar {
@@ -328,111 +379,112 @@
 		height: 40vh;
 	}
 
-	/* --- CLEAN, PERFORMANCE-OPTIMIZED TYPOGRAPHY --- */
-
 	.lyric-line {
 		display: block;
 		width: 100%;
 		text-align: left;
 		background: transparent;
 		border: none;
-		padding: 1rem 0;
+		padding: 1.25rem 0;
 		margin: 0.5rem 0;
 		
-		font-family: var(--font-family-sans, system-ui, -apple-system, sans-serif);
+		font-family: var(--font-sans);
 		font-size: 2.25rem;
-		@media (min-width: 640px) { font-size: 2.5rem; }
-		@media (min-width: 1024px) { font-size: 3.25rem; }
+		@media (width >= --theme(--breakpoint-sm)) { font-size: 2.75rem; }
+		@media (width >= --theme(--breakpoint-lg)) { font-size: 3.5rem; }
 		
 		font-weight: 700;
-		line-height: 1.2;
+		line-height: 1.1;
 		letter-spacing: -0.02em;
 		white-space: pre-wrap;
 		user-select: none; 
 		
-		color: var(--color-onSurfaceVariant, #a0a0a0);
-		opacity: 0.35;
-		transform: scale(0.95); 
+		color: var(--color-onSurface);
+		opacity: calc(clamp(0.1, 1 - (var(--line-distance) * 0.25), 1));
+		transform: scale(calc(clamp(0.85, 1 - (var(--line-distance) * 0.03), 1)));
 		transform-origin: center left;
 		cursor: pointer;
 
-		/* Only animate cheap properties */
 		will-change: transform, opacity;
 		transition:
-			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
-			transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+			opacity 0.8s var(--ease-standard),
+			transform 0.8s var(--ease-standard),
+			font-weight 0.4s var(--ease-standard);
 	}
 
 	.lyric-line.secondary-line {
 		font-size: 1.5rem;
-		@media (min-width: 640px) { font-size: 1.75rem; }
-		@media (min-width: 1024px) { font-size: 2.25rem; }
+		@media (width >= --theme(--breakpoint-sm)) { font-size: 1.875rem; }
+		@media (width >= --theme(--breakpoint-lg)) { font-size: 2.25rem; }
 		padding-left: 2rem;
-		margin-top: -0.25rem;
+		margin-top: -0.5rem;
 	}
 
 	.lyric-line:hover {
-		opacity: 0.6;
+		opacity: 0.8 !important;
 	}
 
 	.lyric-line.active {
-		color: var(--color-onSurface, #ffffff);
-		opacity: 1;
-		transform: scale(1);
+		opacity: 1 !important;
+		transform: scale(1.05) !important;
 		font-weight: 800;
-		/* Subtle shadow for depth, no heavy bleeding */
-		text-shadow: 0 4px 16px rgba(0,0,0,0.4);
+		text-shadow: 0 4px 24px color-mix(in srgb, var(--track-primary-color) 30%, transparent);
 	}
 
 	.lyric-line.secondary-line.active {
-		opacity: 0.85;
-	}
-
-	.lyric-line.past {
-		opacity: 0.2;
-		transform: scale(0.9);
+		transform: scale(1.02) !important;
 	}
 
 	/* Karaoke Fills */
 	.lyric-word {
 		display: inline-block;
 		color: transparent;
-		background-color: var(--color-onSurfaceVariant, #555);
-		background-image: linear-gradient(var(--color-onSurface, #fff), var(--color-onSurface, #fff));
-		background-size: 0% 100%;
+		background-color: color-mix(in srgb, var(--color-onSurface) 20%, transparent);
+		background-image: linear-gradient(var(--color-onSurface), var(--color-onSurface));
+		background-size: var(--word-progress, 0%) 100%;
 		background-repeat: no-repeat;
 		
 		background-clip: text;
 		-webkit-background-clip: text;
 		
-		/* Smooths out the jumps between time update ticks */
-		transition: background-size 75ms linear;
+		transition: background-size 100ms linear;
 		will-change: background-size;
 	}
 
 	.lyric-word.secondary-word {
-		font-size: 0.8em;
+		font-size: 0.85em;
 		opacity: 0.8;
 	}
 
 	.lyric-line.active .lyric-word {
-		background-size: var(--word-progress, 0%) 100%;
 		-webkit-text-fill-color: transparent;
+		background-color: color-mix(in srgb, var(--color-onSurface) 40%, transparent);
+	}
+
+	.lyrics-controls {
+		position: absolute;
+		bottom: 2rem;
+		left: 0;
+		right: 0;
+		display: flex;
+		justify-content: center;
+		z-index: 20;
+		animation: fade-in 0.3s var(--ease-standard);
 	}
 
 	.skeleton {
-		animation: ambient-shimmer 2.5s infinite ease-in-out;
+		animation: skeleton-shimmer 2s infinite linear;
 		background: linear-gradient(
 			90deg,
-			var(--color-surfaceContainerHighest, #222) 0%,
-			var(--color-surfaceContainer, #333) 50%,
-			var(--color-surfaceContainerHighest, #222) 100%
+			var(--color-surfaceContainerHighest) 0%,
+			var(--color-surfaceContainer) 50%,
+			var(--color-surfaceContainerHighest) 100%
 		);
 		background-size: 200% 100%;
 	}
 
-	@keyframes ambient-shimmer {
-		0% { background-position: -200% 0; }
-		100% { background-position: 200% 0; }
+	@keyframes skeleton-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
 	}
 </style>
