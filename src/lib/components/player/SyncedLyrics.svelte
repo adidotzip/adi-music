@@ -246,7 +246,7 @@
 							class="lyric-word" 
 							class:active-word={isActiveLine && wordIndex <= activeWordIdx}
 							style="--word-progress: {wordProgress}%"
-						>{word.string + ' '}</span>
+						>{word.string}</span>{' '}
 					{/each}
 				</button>
 			{/each}
@@ -399,12 +399,14 @@
 		background: linear-gradient(
 			to right,
 			var(--color-onSurface, #ffffff) 0%,
-			var(--color-onSurface, #ffffff) var(--word-progress),
-			rgba(255, 255, 255, 0.3) var(--word-progress)
+			var(--color-onSurface, #ffffff) var(--word-progress, 0%),
+			rgba(255, 255, 255, 0.3) var(--word-progress, 0%)
 		);
+		background-size: 100% 100%;
+		background-repeat: no-repeat;
 		-webkit-background-clip: text;
 		background-clip: text;
-		color: transparent;
+		-webkit-text-fill-color: transparent;
 		opacity: 1;
 		filter: none;
 		transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -412,7 +414,7 @@
 
 	.lyric-line.active .lyric-word.active-word {
 		transform: scale(1.05);
-		text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+		filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
 	}
 
 	.lyric-line.past {
