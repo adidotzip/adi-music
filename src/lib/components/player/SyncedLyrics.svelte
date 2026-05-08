@@ -41,10 +41,9 @@
 	let loading = $state(false)
 	let scrollerElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
-	
+
 	let isUserScrolling = $state(false)
 	let userScrollTimeout: ReturnType<typeof setTimeout>
-	let previousActiveIndex = -1
 
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
@@ -135,16 +134,17 @@
 
 		scrollerElement.scrollTo({
 			top: targetScroll,
-			behavior: smooth ? 'smooth' : 'auto'
+			behavior: smooth ? 'smooth' : 'auto',
 		})
 	}
 
+	// FIX: Use $derived to track the previous index reactively via a dedicated
+	// derived store, and drive scroll purely from activeLineIndex changes.
 	$effect(() => {
-		if (activeLineIndex !== previousActiveIndex) {
-			previousActiveIndex = activeLineIndex
-			if (!isUserScrolling) {
-				scrollToActiveLine()
-			}
+		// Svelte 5: accessing activeLineIndex here makes this effect re-run on change.
+		const idx = activeLineIndex
+		if (!isUserScrolling) {
+			scrollToActiveLine()
 		}
 	})
 
@@ -152,7 +152,6 @@
 		reloadCount += 1
 	}
 
-	// Triggered strictly by physical user interactions, completely ignoring programmatic scrolls
 	const handleUserInteraction = () => {
 		isUserScrolling = true
 		clearTimeout(userScrollTimeout)
@@ -176,34 +175,25 @@
 	</div>
 {/snippet}
 
-<section 
+<section
 	class={["lyrics-shell w-full", className]}
-	aria-live="polite" 
-	style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary)'}"
+	aria-live="polite"
 >
-	<div class="ambient-glow-background"></div>
-	
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
 	{:else if loading}
-		<div class="lyrics-header">
-			<div class="min-w-0">
-				<div class="skeleton mb-2 h-7 w-36 rounded-md"></div>
-				<div class="skeleton h-5 w-28 rounded-md opacity-70"></div>
-			</div>
-		</div>
 		<div class="lyrics-scroller overflow-hidden px-6 pt-12">
 			{#each Array(6) as _, i}
-				<div 
+				<div
 					class="skeleton mb-10 h-14 rounded-xl opacity-20"
 					style="width: {60 + Math.random() * 30}%; transform: translateX({i % 2 === 0 ? '0' : '5%'})"
 				></div>
 			{/each}
 		</div>
 	{:else if result?.status === 'found'}
-		<div 
-			class="lyrics-scroller" 
-			bind:this={scrollerElement} 
+		<div
+			class="lyrics-scroller"
+			bind:this={scrollerElement}
 			onwheel={handleUserInteraction}
 			ontouchmove={handleUserInteraction}
 			onmousedown={handleUserInteraction}
@@ -238,12 +228,13 @@
 						{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
 						{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
 						{@const duration = Math.max(nextTime - word.time, 1)}
-						{@const wordProgress = isCurrentWord 
-							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100 
+						{@const wordProgress = isCurrentWord
+							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100
 							: (isPastWord ? 100 : 0)}
-						
-						<span 
-							class="lyric-word" 
+
+						<span
+							class="lyric-word"
+							class:past-word={isPastWord}
 							class:secondary-word={word.isSecondary && !line.isSecondaryLine}
 							style="--word-progress: {wordProgress}%"
 						>{word.string}</span>
@@ -259,19 +250,6 @@
 		{@render emptyState('musicNote', 'Not Found', 'Could not find lyrics for this track.')}
 	{:else}
 		{@render emptyState('alertCircle', 'Failed', 'Failed to load lyrics.')}
-	{/if}
-	
-	{#if isUserScrolling}
-		<button
-			class="return-to-active-btn"
-			onclick={() => {
-				isUserScrolling = false;
-				scrollToActiveLine();
-			}}
-		>
-			<Icon type="chevronDown" class="mr-2 size-5" />
-			Return to current line
-		</button>
 	{/if}
 </section>
 
@@ -289,53 +267,27 @@
 		animation: fade-in 0.8s var(--ease-standard);
 	}
 
-	.ambient-glow-background {
-		position: absolute;
-		inset: 0;
-		background: radial-gradient(
-			140% 140% at 50% 0%,
-			color-mix(in srgb, var(--primary-color) 25%, transparent) 0%,
-			transparent 100%
-		),
-		radial-gradient(
-			120% 120% at 50% 100%,
-			color-mix(in srgb, var(--primary-color) 15%, transparent) 0%,
-			transparent 100%
-		);
-		filter: blur(80px);
-		z-index: 0;
-		pointer-events: none;
-		transition: background 1.5s ease;
-		animation: subtle-drift 20s infinite alternate ease-in-out;
-		will-change: opacity, transform;
-	}
-
-	@keyframes subtle-drift {
-		0% { opacity: 0.5; transform: scale(1) translateY(0); }
-		100% { opacity: 0.8; transform: scale(1.15) translateY(-3%); }
-	}
-
 	.lyrics-scroller {
-		position: relative; /* REQUIRED: Anchors offsetTop for smooth scrolling */
+		position: relative;
 		flex: 1;
 		overflow-y: auto;
 		padding: 0 1rem;
 		@media (min-width: 640px) { padding: 0 2rem; }
 		z-index: 5;
-		
-		scrollbar-width: none; 
+
+		scrollbar-width: none;
 		-ms-overflow-style: none;
-		
+
 		mask-image: linear-gradient(
-			to bottom, 
-			transparent 0%, 
+			to bottom,
+			transparent 0%,
 			black 15%,
 			black 85%,
 			transparent 100%
 		);
 		-webkit-mask-image: linear-gradient(
-			to bottom, 
-			transparent 0%, 
+			to bottom,
+			transparent 0%,
 			black 15%,
 			black 85%,
 			transparent 100%
@@ -350,36 +302,6 @@
 		height: 45vh;
 	}
 
-	.return-to-active-btn {
-		position: absolute;
-		bottom: 2rem;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 20;
-		display: flex;
-		align-items: center;
-		padding: 0.75rem 1.25rem;
-		background: var(--color-primary);
-		color: var(--color-onPrimary);
-		border: none;
-		border-radius: 2rem;
-		font-weight: 600;
-		font-size: 0.875rem;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-		cursor: pointer;
-		transition: transform 0.2s var(--ease-standard), background 0.2s var(--ease-standard);
-		animation: fade-in 0.3s ease-out;
-	}
-
-	.return-to-active-btn:hover {
-		transform: translateX(-50%) scale(1.05);
-		background: color-mix(in srgb, var(--color-primary) 90%, white);
-	}
-
-	.return-to-active-btn:active {
-		transform: translateX(-50%) scale(0.95);
-	}
-
 	.lyric-line {
 		display: block;
 		width: 100%;
@@ -389,18 +311,19 @@
 		padding: 1rem 0;
 		margin: 0.5rem 0;
 		contain: content;
-		
+
 		font-family: var(--font-sans);
 		font-size: 1.75rem;
 		@media (min-width: 640px) { font-size: 2rem; }
 		@media (min-width: 1024px) { font-size: 2.5rem; }
-		
+
 		font-weight: 700;
 		line-height: 1.15;
 		letter-spacing: -0.03em;
 		white-space: pre-wrap;
-		user-select: none; 
-		
+		user-select: none;
+
+		/* FIX: Always set a real color so text is always visible */
 		color: var(--color-onSurfaceVariant);
 		opacity: calc(0.5 / (1 + var(--distance) * 0.15));
 		transform: scale(calc(1 - var(--distance) * 0.025));
@@ -408,7 +331,6 @@
 		cursor: pointer;
 
 		will-change: transform, opacity, filter;
-		/* Premium Cubic-Bezier Smoothness */
 		transition:
 			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
 			transform 0.6s cubic-bezier(0.25, 1, 0.5, 1),
@@ -434,7 +356,6 @@
 		opacity: 1;
 		transform: scale(1.05);
 		font-weight: 800;
-		text-shadow: 0 0 24px color-mix(in srgb, var(--primary-color) 40%, transparent);
 	}
 
 	.lyric-line.secondary-line.active {
@@ -448,11 +369,10 @@
 		filter: blur(1px);
 	}
 
-	/* Beautiful Multi-layer Karaoke Fills */
+	/* Karaoke word fill — only use background-clip trick on active line words */
 	.lyric-word {
 		display: inline-block;
-		transition: background-size 150ms linear, color 0.2s ease;
-		will-change: background-size;
+		/* No background-clip here — color comes from the parent .lyric-line */
 	}
 
 	.lyric-word.secondary-word {
@@ -460,20 +380,26 @@
 		opacity: 0.8;
 	}
 
+	/* FIX: Scope the invisible-text karaoke trick strictly to active-line words */
 	.lyric-line.active .lyric-word {
-		/* Top layer maps to the active fill, bottom layer maps to the inactive fill */
-		background-image: 
+		background-image:
 			linear-gradient(var(--color-onSurface), var(--color-onSurface)),
-			linear-gradient(var(--color-onSurfaceVariant), var(--color-onSurfaceVariant));
-		background-size: 
-			var(--word-progress, 0%) 100%, 
+			linear-gradient(color-mix(in srgb, var(--color-onSurface) 30%, transparent), color-mix(in srgb, var(--color-onSurface) 30%, transparent));
+		background-size:
+			var(--word-progress, 0%) 100%,
 			100% 100%;
 		background-repeat: no-repeat;
-		
 		background-clip: text;
 		-webkit-background-clip: text;
 		color: transparent;
 		-webkit-text-fill-color: transparent;
+		transition: background-size 150ms linear;
+		will-change: background-size;
+	}
+
+	/* Past words in active line: fully filled */
+	.lyric-line.active .lyric-word.past-word {
+		--word-progress: 100%;
 	}
 
 	.skeleton {
