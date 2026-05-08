@@ -42,12 +42,43 @@
 	let reloadCount = $state(0)
 	
 	let previousActiveIndex = -1
-	let isUserScrolling = $state(false)
-	let userScrollTimeout: number | undefined
 
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
-	const activeLineIndex = $derived(getActiveLineIndex(lines, currentTimeMs))
+
+	// Pre-process lines to detect secondary vocals/lyrics enclosed in ()
+	const processedLines = $derived(
+		lines.map((line) => {
+			let inSecondary = false
+			const words = line.words.map((word) => {
+				let isWordSecondary = inSecondary
+				if (word.string.includes('(')) {
+					inSecondary = true
+					isWordSecondary = true
+				}
+				if (word.string.includes(')')) {
+					inSecondary = false
+					isWordSecondary = true
+				}
+				return {
+					...word,
+					isSecondary: isWordSecondary,
+				}
+			})
+
+			// Check if the entire line is wrapped in parentheses
+			const lineText = words.map((w) => w.string).join('').trim()
+			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
+
+			return {
+				...line,
+				words,
+				isSecondaryLine,
+			}
+		}),
+	)
+
+	const activeLineIndex = $derived(getActiveLineIndex(processedLines, currentTimeMs))
 	const sourceLabel = $derived(
 		foundResult?.source === 'lyricsplus' ? 'LyricsPlus' : 'LRCLIB',
 	)
@@ -92,11 +123,11 @@
 		return () => controller.abort()
 	})
 
-	// M3 Expressive Scroll Animation Logic
+	// Premium Fluid Scroll Animation Logic
 	let animationFrameId: number | undefined
 
 	const scrollToActiveLine = (smooth = true) => {
-		if (!scrollerElement || activeLineIndex < 0 || isUserScrolling) return
+		if (!scrollerElement || activeLineIndex < 0) return
 
 		const activeEl = scrollerElement.querySelector<HTMLElement>(
 			`[data-line-index="${activeLineIndex}"]`,
@@ -113,7 +144,7 @@
 		if (smooth) {
 			const startScroll = scrollerElement.scrollTop
 			const distance = targetScroll - startScroll
-			const duration = 900 
+			const duration = 850 
 			let startTime: number | null = null
 
 			const animate = (timestamp: DOMHighResTimeStamp) => {
@@ -121,16 +152,13 @@
 				const timeElapsed = timestamp - startTime
 				let progress = Math.min(timeElapsed / duration, 1)
 
-				// M3 Expressive Spring/Back Ease-Out
-				const tension = 1.2;
-				const p = progress - 1;
-				const ease = progress === 1 ? 1 : 1 + p * p * ((tension + 1) * p + tension);
+				const ease = 1 - Math.pow(1 - progress, 4)
 
-				if (scrollerElement && !isUserScrolling) {
+				if (scrollerElement) {
 					scrollerElement.scrollTop = startScroll + distance * ease
 				}
 
-				if (progress < 1 && !isUserScrolling) {
+				if (progress < 1) {
 					animationFrameId = requestAnimationFrame(animate)
 				}
 			}
@@ -152,24 +180,8 @@
 	$effect(() => {
 		return () => {
 			if (animationFrameId) cancelAnimationFrame(animationFrameId)
-			if (userScrollTimeout) clearTimeout(userScrollTimeout)
 		}
 	})
-
-	const resumeSync = () => {
-		isUserScrolling = false;
-		if (userScrollTimeout) clearTimeout(userScrollTimeout);
-		scrollToActiveLine();
-	}
-
-	const handleScroll = () => {
-		isUserScrolling = true
-		if (userScrollTimeout) clearTimeout(userScrollTimeout)
-		
-		userScrollTimeout = window.setTimeout(() => {
-			resumeSync()
-		}, 8000) 
-	}
 
 	const retry = () => {
 		reloadCount += 1
@@ -192,7 +204,7 @@
 	aria-live="polite" 
 	style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary, #D0BCFF)'}"
 >
-	<div class="m3-tonal-background"></div>
+	<div class="ambient-glow-background"></div>
 	
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
@@ -224,15 +236,9 @@
 			</div>
 		</div>
 
-		<div
-			class="lyrics-scroller"
-			bind:this={scrollerElement}
-			onscroll={handleScroll}
-			onwheel={handleScroll}
-			ontouchstart={handleScroll}
-		>
+		<div class="lyrics-scroller" bind:this={scrollerElement}>
 			<div class="lyrics-spacer"></div>
-			{#each lines as line, lineIndex (lineIndex)}
+			{#each processedLines as line, lineIndex (lineIndex)}
 				{@const isActiveLine = lineIndex === activeLineIndex}
 				{@const activeWordIdx = getActiveWordIndex(line, currentTimeMs)}
 
@@ -241,10 +247,9 @@
 					class="lyric-line interactable"
 					class:active={isActiveLine}
 					class:past={lineIndex < activeLineIndex}
+					class:secondary-line={line.isSecondaryLine}
 					data-line-index={lineIndex}
 					onclick={() => {
-						isUserScrolling = false;
-						if (userScrollTimeout) clearTimeout(userScrollTimeout);
 						player.seek(line.startTime / 1000);
 					}}
 				>
@@ -260,6 +265,7 @@
 						<span 
 							class="lyric-word" 
 							class:active-word={isCurrentWord}
+							class:secondary-word={word.isSecondary && !line.isSecondaryLine}
 							style="--word-progress: {wordProgress}%"
 						>{word.string}</span>{' '}
 					{/each}
@@ -267,16 +273,6 @@
 			{/each}
 			<div class="lyrics-spacer"></div>
 		</div>
-
-		<button 
-			class="resume-sync-fab" 
-			class:visible={isUserScrolling}
-			onclick={resumeSync}
-			aria-label="Resume auto-scrolling"
-		>
-			<Icon type="arrowDown" class="size-5" />
-			<span>Sync</span>
-		</button>
 	{:else if result?.status === 'instrumental'}
 		{@render emptyState('musicNote', 'Instrumental', 'This track is instrumental.')}
 	{:else if result?.status === 'not-found'}
@@ -294,59 +290,61 @@
 		max-height: 850px;
 		position: relative;
 		overflow: hidden;
-		background: var(--color-surface, #121212);
+		background: var(--color-surface, #000000); 
 		border-radius: 1.75rem; 
-		box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+		box-shadow: 0 12px 48px rgba(0,0,0,0.4);
 	}
 
-	.m3-tonal-background {
+	.ambient-glow-background {
 		position: absolute;
 		inset: 0;
 		background: radial-gradient(
-			120% 120% at 50% -10%,
-			color-mix(in srgb, var(--primary-color) 25%, transparent) 0%,
+			100% 100% at 50% -10%,
+			color-mix(in srgb, var(--primary-color) 30%, transparent) 0%,
 			transparent 80%
 		),
 		radial-gradient(
-			100% 100% at 50% 110%,
-			color-mix(in srgb, var(--primary-color) 18%, transparent) 0%,
+			80% 120% at 50% 120%,
+			color-mix(in srgb, var(--primary-color) 20%, transparent) 0%,
 			transparent 100%
 		);
+		filter: blur(40px); 
 		z-index: 0;
 		pointer-events: none;
 		transition: background 1.5s ease;
-		animation: pulse-glow 8s infinite alternate ease-in-out;
-		will-change: opacity, transform; /* GPU Optimization */
+		animation: subtle-drift 12s infinite alternate ease-in-out;
+		will-change: opacity, transform;
 	}
 
-	@keyframes pulse-glow {
-		0% { opacity: 0.8; transform: scale(1); }
-		100% { opacity: 1; transform: scale(1.05); }
+	@keyframes subtle-drift {
+		0% { opacity: 0.7; transform: scale(1) translateY(0); }
+		100% { opacity: 1; transform: scale(1.05) translateY(-2%); }
 	}
 
 	.lyrics-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 1.5rem 2rem;
+		padding: 1.5rem 2.5rem;
 		z-index: 10;
 		background: linear-gradient(
 			to bottom,
-			var(--color-surface, #121212) 20%,
+			color-mix(in srgb, var(--color-surface, #000) 80%, transparent) 10%,
 			transparent 100%
 		);
 	}
 
 	.source-badge {
-		background: color-mix(in srgb, var(--primary-color) 20%, var(--color-surfaceContainerHighest, #333));
+		background: color-mix(in srgb, var(--primary-color) 15%, var(--color-surfaceContainerHighest, #222));
 		color: var(--primary-color);
 		padding: 0.375rem 0.875rem;
-		border-radius: 0.5rem; 
+		border-radius: 999px; 
 		font-size: 0.75rem;
 		font-weight: 700;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.04em;
 		text-transform: uppercase;
-		backdrop-filter: blur(8px);
+		backdrop-filter: blur(12px);
+		border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
 	}
 
 	.lyrics-scroller {
@@ -362,15 +360,15 @@
 		mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 15%, 
-			black 85%, 
+			black 20%, 
+			black 80%, 
 			transparent 100%
 		);
 		-webkit-mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 15%, 
-			black 85%, 
+			black 20%, 
+			black 80%, 
 			transparent 100%
 		);
 		will-change: scroll-position;
@@ -381,10 +379,10 @@
 	}
 
 	.lyrics-spacer {
-		height: 40vh;
+		height: 45vh;
 	}
 
-	/* --- M3 EXPRESSIVE BOUNCE TYPOGRAPHY --- */
+	/* --- PREMIUM APPLE-STYLE TYPOGRAPHY --- */
 
 	.lyric-line {
 		display: block;
@@ -392,136 +390,108 @@
 		text-align: left;
 		background: transparent;
 		border: none;
-		padding: 1.25rem 0;
-		margin: 0.25rem 0;
+		padding: 1rem 0;
+		margin: 0.5rem 0;
 		
-		font-family: var(--font-family-sans, system-ui, sans-serif);
+		font-family: var(--font-family-sans, system-ui, -apple-system, sans-serif);
 		font-size: 2.25rem;
 		@media (min-width: 640px) { font-size: 2.5rem; }
-		@media (min-width: 1024px) { font-size: 3rem; }
+		@media (min-width: 1024px) { font-size: 3.25rem; }
 		
 		font-weight: 700;
-		line-height: 1.2;
-		letter-spacing: -0.02em;
+		line-height: 1.15;
+		letter-spacing: -0.03em;
 		white-space: pre-wrap;
-		user-select: none; /* Prevents sticky highlighting on drag */
+		user-select: none; 
 		
 		color: var(--color-onSurfaceVariant, #a0a0a0);
-		opacity: 0.4;
-		filter: blur(1px);
-		/* Switched to translate3d for hardware acceleration */
-		transform: scale(0.95) translate3d(0, 12px, 0); 
+		opacity: 0.25;
+		filter: blur(3px);
+		transform: scale(0.9) translate3d(0, 15px, 0); 
 		transform-origin: center left;
 		cursor: pointer;
 
 		will-change: transform, opacity, filter;
 
-		/* The M3 "Expressive" Spatial Bounce Curve */
 		transition:
-			opacity 0.7s cubic-bezier(0.2, 0, 0, 1),
-			transform 0.8s cubic-bezier(0.34, 1.4, 0.64, 1),
-			filter 0.7s cubic-bezier(0.2, 0, 0, 1);
+			opacity 0.8s cubic-bezier(0.25, 1, 0.5, 1),
+			transform 0.8s cubic-bezier(0.25, 1, 0.5, 1),
+			filter 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+	}
+
+	/* Secondary Lines Styling */
+	.lyric-line.secondary-line {
+		font-size: 1.5rem;
+		@media (min-width: 640px) { font-size: 1.75rem; }
+		@media (min-width: 1024px) { font-size: 2.25rem; }
+		padding-left: 2rem;
+		margin-top: -0.25rem; /* Tucks the backing vocals closer to the main line */
 	}
 
 	.lyric-line:hover {
-		opacity: 0.7;
-		filter: blur(0px);
-		transform: scale(0.97) translate3d(0, 6px, 0);
+		opacity: 0.6;
+		filter: blur(1px);
+		transform: scale(0.95) translate3d(0, 5px, 0);
 	}
 
 	.lyric-line.active {
 		color: var(--color-onSurface, #ffffff);
 		opacity: 1;
 		filter: blur(0px);
-		transform: scale(1.05) translate3d(0, 0, 0);
+		transform: scale(1) translate3d(0, 0, 0);
 		font-weight: 800;
-		text-shadow: 0 4px 24px color-mix(in srgb, var(--primary-color) 40%, transparent);
+		text-shadow: 0 12px 40px color-mix(in srgb, var(--primary-color) 35%, transparent);
+	}
+
+	.lyric-line.secondary-line.active {
+		opacity: 0.85; /* Keep backing vocals slightly muted even when active */
+		text-shadow: 0 8px 30px color-mix(in srgb, var(--primary-color) 25%, transparent);
 	}
 
 	.lyric-line.past {
-		opacity: 0.2;
-		filter: blur(2px);
-		transform: scale(0.92) translate3d(0, -12px, 0);
+		opacity: 0.15;
+		filter: blur(5px);
+		transform: scale(0.85) translate3d(0, -20px, 0);
 	}
 
-	/* Word Level Playful Animations */
+	/* Elegant Text Fills */
 	.lyric-word {
 		display: inline-block;
 		color: transparent;
-		/* Much more performant than generating linear gradients per-frame: */
-		background-color: var(--color-onSurfaceVariant, #666);
+		background-color: var(--color-onSurfaceVariant, #555);
 		background-image: linear-gradient(var(--color-onSurface, #fff), var(--color-onSurface, #fff));
 		background-size: 0% 100%;
 		background-repeat: no-repeat;
 		
 		background-clip: text;
 		-webkit-background-clip: text;
-		transform-origin: bottom center;
-		
-		transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+		transform-origin: bottom left;
+	}
+
+	/* Secondary Word Styling for inline lyrics */
+	.lyric-word.secondary-word {
+		font-size: 0.8em;
+		opacity: 0.8;
 	}
 
 	.lyric-line.active .lyric-word {
-		/* Simply update the size instead of building new gradient stops */
 		background-size: var(--word-progress, 0%) 100%;
 		-webkit-text-fill-color: transparent;
 	}
 
-	.lyric-line.active .lyric-word.active-word {
-		/* Snappy Karaoke Pop & Tilt */
-		transform: translate3d(0, -6px, 0) scale(1.08) rotate(-1deg);
-	}
-
-	/* Resume Sync FAB */
-	.resume-sync-fab {
-		position: absolute;
-		bottom: 2rem;
-		right: 2rem;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1.25rem;
-		background: var(--color-surfaceContainerHigh, #2A2A2A);
-		color: var(--color-onSurface, #FFF);
-		border-radius: 999px;
-		font-weight: 600;
-		font-size: 0.875rem;
-		box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-		border: 1px solid color-mix(in srgb, var(--color-onSurface) 10%, transparent);
-		z-index: 20;
-		cursor: pointer;
-		opacity: 0;
-		transform: translate3d(0, 24px, 0) scale(0.9);
-		pointer-events: none;
-		
-		/* Emphasized Decelerate */
-		transition: all 0.5s cubic-bezier(0.05, 0.7, 0.1, 1);
-	}
-
-	.resume-sync-fab.visible {
-		opacity: 1;
-		transform: translate3d(0, 0, 0) scale(1);
-		pointer-events: auto;
-	}
-
-	.resume-sync-fab:hover {
-		background: var(--color-surfaceContainerHighest, #333);
-		transform: translate3d(0, -4px, 0) scale(1.05);
-	}
-
 	/* Skeleton Loaders */
 	.skeleton {
-		animation: m3-shimmer 2s infinite linear;
+		animation: ambient-shimmer 2.5s infinite ease-in-out;
 		background: linear-gradient(
 			90deg,
-			var(--color-surfaceContainerHighest, #333) 0%,
-			var(--color-surfaceContainer, #444) 50%,
-			var(--color-surfaceContainerHighest, #333) 100%
+			var(--color-surfaceContainerHighest, #222) 0%,
+			var(--color-surfaceContainer, #333) 50%,
+			var(--color-surfaceContainerHighest, #222) 100%
 		);
 		background-size: 200% 100%;
 	}
 
-	@keyframes m3-shimmer {
+	@keyframes ambient-shimmer {
 		0% { background-position: -200% 0; }
 		100% { background-position: 200% 0; }
 	}
