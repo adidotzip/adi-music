@@ -49,9 +49,10 @@
 		foundResult?.source === 'lyricsplus' ? 'LyricsPlus' : 'LRCLIB',
 	)
 
-	const getActiveWordIndex = (line: SyncedLyricsLine): number => {
+	// Explicitly pass timeMs to force Svelte's reactivity engine to update the {@const}
+	const getActiveWordIndex = (line: SyncedLyricsLine, timeMs: number): number => {
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
-			if (currentTimeMs >= line.words[i].time) {
+			if (timeMs >= line.words[i].time) {
 				return i
 			}
 		}
@@ -150,7 +151,7 @@
 			<div class="lyrics-spacer"></div>
 			{#each lines as line, lineIndex (lineIndex)}
 				{@const isActiveLine = lineIndex === activeLineIndex}
-				{@const activeWordIdx = getActiveWordIndex(line)}
+				{@const activeWordIdx = getActiveWordIndex(line, currentTimeMs)}
 
 				<button
 					type="button"
