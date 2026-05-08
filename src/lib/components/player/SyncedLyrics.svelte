@@ -41,9 +41,52 @@
 	let loading = $state(false)
 	let scrollerElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
-
 	let isUserScrolling = $state(false)
 	let userScrollTimeout: ReturnType<typeof setTimeout>
+
+	// ─── RAF-driven smooth time ───────────────────────────────────────────────
+	// Instead of relying on prop updates for word-progress, we maintain a
+	// high-frequency local time that's interpolated every animation frame.
+	let smoothTimeMs = $state(currentTimeMs)
+	let rafId: number
+	let lastRafTimestamp: number | undefined
+	let lastPropTime = currentTimeMs
+
+	$effect(() => {
+		// When the prop changes (e.g. seek, or slow interval update), re-anchor
+		// our RAF baseline so we interpolate from the correct position.
+		lastPropTime = currentTimeMs
+		lastRafTimestamp = undefined // force re-anchor on next frame
+	})
+
+	$effect(() => {
+		// Run a RAF loop for the lifetime of this component.
+		let running = true
+
+		const tick = (now: number) => {
+			if (!running) return
+
+			if (lastRafTimestamp === undefined) {
+				// First frame after an anchor: snap to prop time
+				lastRafTimestamp = now
+				smoothTimeMs = lastPropTime
+			} else {
+				const elapsed = now - lastRafTimestamp
+				lastRafTimestamp = now
+				smoothTimeMs = lastPropTime + elapsed
+				lastPropTime = smoothTimeMs
+			}
+
+			rafId = requestAnimationFrame(tick)
+		}
+
+		rafId = requestAnimationFrame(tick)
+		return () => {
+			running = false
+			cancelAnimationFrame(rafId)
+		}
+	})
+	// ─────────────────────────────────────────────────────────────────────────
 
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
@@ -61,30 +104,20 @@
 					inSecondary = false
 					isWordSecondary = true
 				}
-				return {
-					...word,
-					isSecondary: isWordSecondary,
-				}
+				return { ...word, isSecondary: isWordSecondary }
 			})
-
 			const lineText = words.map((w) => w.string).join('').trim()
 			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
-
-			return {
-				...line,
-				words,
-				isSecondaryLine,
-			}
+			return { ...line, words, isSecondaryLine }
 		}),
 	)
 
-	const activeLineIndex = $derived(getActiveLineIndex(processedLines, currentTimeMs))
+	// Use smoothTimeMs for line index so active line tracking is also fluid
+	const activeLineIndex = $derived(getActiveLineIndex(processedLines, smoothTimeMs))
 
 	const getActiveWordIndex = (line: SyncedLyricsLine, timeMs: number): number => {
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
-			if (timeMs >= line.words[i].time) {
-				return i
-			}
+			if (timeMs >= line.words[i].time) return i
 		}
 		return -1
 	}
@@ -95,7 +128,6 @@
 			loading = false
 			return
 		}
-
 		const requestedReloadCount = reloadCount
 		const controller = new AbortController()
 		loading = true
@@ -121,36 +153,28 @@
 
 	const scrollToActiveLine = (smooth = true) => {
 		if (!scrollerElement || activeLineIndex < 0) return
-
 		const activeEl = scrollerElement.querySelector<HTMLElement>(
 			`[data-line-index="${activeLineIndex}"]`,
 		)
 		if (!activeEl) return
-
 		const targetScroll =
-			activeEl.offsetTop -
-			scrollerElement.offsetHeight / 2 +
-			activeEl.offsetHeight / 2
-
-		scrollerElement.scrollTo({
-			top: targetScroll,
-			behavior: smooth ? 'smooth' : 'auto',
-		})
+			activeEl.offsetTop - scrollerElement.offsetHeight / 2 + activeEl.offsetHeight / 2
+		scrollerElement.scrollTo({ top: targetScroll, behavior: smooth ? 'smooth' : 'auto' })
 	}
 
-	// FIX: Use $derived to track the previous index reactively via a dedicated
-	// derived store, and drive scroll purely from activeLineIndex changes.
+	// ─── Auto-scroll fix ──────────────────────────────────────────────────────
+	// Explicitly destructure activeLineIndex into a local const so Svelte's
+	// compiler sees it as a reactive read and re-runs this effect on change.
 	$effect(() => {
-		// Svelte 5: accessing activeLineIndex here makes this effect re-run on change.
-		const idx = activeLineIndex
+		const idx = activeLineIndex // <-- reactive read tracked by Svelte
+		void idx                    // prevent tree-shaking
 		if (!isUserScrolling) {
 			scrollToActiveLine()
 		}
 	})
+	// ─────────────────────────────────────────────────────────────────────────
 
-	const retry = () => {
-		reloadCount += 1
-	}
+	const retry = () => { reloadCount += 1 }
 
 	const handleUserInteraction = () => {
 		isUserScrolling = true
@@ -186,7 +210,7 @@
 			{#each Array(6) as _, i}
 				<div
 					class="skeleton mb-10 h-14 rounded-xl opacity-20"
-					style="width: {60 + Math.random() * 30}%; transform: translateX({i % 2 === 0 ? '0' : '5%'})"
+					style="width: {60 + Math.random() * 30}%"
 				></div>
 			{/each}
 		</div>
@@ -199,48 +223,48 @@
 			onmousedown={handleUserInteraction}
 			onkeydown={(e) => {
 				if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Space'].includes(e.code)) {
-					handleUserInteraction();
+					handleUserInteraction()
 				}
 			}}
 		>
 			<div class="lyrics-spacer"></div>
 			<div class="lyrics-content mx-auto w-full max-w-200">
-			{#each processedLines as line, lineIndex (lineIndex)}
-				{@const isActiveLine = lineIndex === activeLineIndex}
-				{@const activeWordIdx = getActiveWordIndex(line, currentTimeMs)}
-				{@const distance = Math.abs(lineIndex - activeLineIndex)}
+				{#each processedLines as line, lineIndex (lineIndex)}
+					{@const isActiveLine = lineIndex === activeLineIndex}
+					{@const activeWordIdx = isActiveLine ? getActiveWordIndex(line, smoothTimeMs) : -1}
+					{@const distance = Math.abs(lineIndex - activeLineIndex)}
 
-				<button
-					type="button"
-					class="lyric-line interactable"
-					class:active={isActiveLine}
-					class:past={lineIndex < activeLineIndex}
-					class:secondary-line={line.isSecondaryLine}
-					data-line-index={lineIndex}
-					style="--distance: {distance}"
-					onclick={() => {
-						player.seek(line.startTime / 1000);
-						isUserScrolling = false;
-					}}
-				>
-					{#each line.words as word, wordIndex}
-						{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
-						{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
-						{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
-						{@const duration = Math.max(nextTime - word.time, 1)}
-						{@const wordProgress = isCurrentWord
-							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100
-							: (isPastWord ? 100 : 0)}
+					<button
+						type="button"
+						class="lyric-line interactable"
+						class:active={isActiveLine}
+						class:past={lineIndex < activeLineIndex}
+						class:secondary-line={line.isSecondaryLine}
+						data-line-index={lineIndex}
+						style="--distance: {distance}"
+						onclick={() => {
+							player.seek(line.startTime / 1000)
+							isUserScrolling = false
+						}}
+					>
+						{#each line.words as word, wordIndex}
+							{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
+							{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
+							{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
+							{@const duration = Math.max(nextTime - word.time, 1)}
+							{@const wordProgress = isCurrentWord
+								? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
+								: isPastWord ? 100 : 0}
 
-						<span
-							class="lyric-word"
-							class:past-word={isPastWord}
-							class:secondary-word={word.isSecondary && !line.isSecondaryLine}
-							style="--word-progress: {wordProgress}%"
-						>{word.string}</span>
-					{/each}
-				</button>
-			{/each}
+							<span
+								class="lyric-word"
+								class:past-word={isPastWord}
+								class:secondary-word={word.isSecondary && !line.isSecondaryLine}
+								style="--word-progress: {wordProgress}%"
+							>{word.string}</span>
+						{/each}
+					</button>
+				{/each}
 			</div>
 			<div class="lyrics-spacer"></div>
 		</div>
@@ -274,10 +298,8 @@
 		padding: 0 1rem;
 		@media (min-width: 640px) { padding: 0 2rem; }
 		z-index: 5;
-
 		scrollbar-width: none;
 		-ms-overflow-style: none;
-
 		mask-image: linear-gradient(
 			to bottom,
 			transparent 0%,
@@ -294,13 +316,9 @@
 		);
 	}
 
-	.lyrics-scroller::-webkit-scrollbar {
-		display: none;
-	}
+	.lyrics-scroller::-webkit-scrollbar { display: none; }
 
-	.lyrics-spacer {
-		height: 45vh;
-	}
+	.lyrics-spacer { height: 45vh; }
 
 	.lyric-line {
 		display: block;
@@ -311,25 +329,20 @@
 		padding: 1rem 0;
 		margin: 0.5rem 0;
 		contain: content;
-
 		font-family: var(--font-sans);
 		font-size: 1.75rem;
 		@media (min-width: 640px) { font-size: 2rem; }
 		@media (min-width: 1024px) { font-size: 2.5rem; }
-
 		font-weight: 700;
 		line-height: 1.15;
 		letter-spacing: -0.03em;
 		white-space: pre-wrap;
 		user-select: none;
-
-		/* FIX: Always set a real color so text is always visible */
 		color: var(--color-onSurfaceVariant);
 		opacity: calc(0.5 / (1 + var(--distance) * 0.15));
 		transform: scale(calc(1 - var(--distance) * 0.025));
 		transform-origin: center;
 		cursor: pointer;
-
 		will-change: transform, opacity, filter;
 		transition:
 			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
@@ -346,10 +359,7 @@
 		font-weight: 600;
 	}
 
-	.lyric-line:hover {
-		opacity: 0.6;
-		transform: scale(0.98);
-	}
+	.lyric-line:hover { opacity: 0.6; transform: scale(0.98); }
 
 	.lyric-line.active {
 		color: var(--color-onSurface);
@@ -369,10 +379,10 @@
 		filter: blur(1px);
 	}
 
-	/* Karaoke word fill — only use background-clip trick on active line words */
 	.lyric-word {
 		display: inline-block;
-		/* No background-clip here — color comes from the parent .lyric-line */
+		/* No transition here — progress is RAF-driven, CSS transition would
+		   add lag on top of already-smooth values and cause the choppiness */
 	}
 
 	.lyric-word.secondary-word {
@@ -380,11 +390,14 @@
 		opacity: 0.8;
 	}
 
-	/* FIX: Scope the invisible-text karaoke trick strictly to active-line words */
+	/* Karaoke fill — scoped to active line only */
 	.lyric-line.active .lyric-word {
 		background-image:
 			linear-gradient(var(--color-onSurface), var(--color-onSurface)),
-			linear-gradient(color-mix(in srgb, var(--color-onSurface) 30%, transparent), color-mix(in srgb, var(--color-onSurface) 30%, transparent));
+			linear-gradient(
+				color-mix(in srgb, var(--color-onSurface) 25%, transparent),
+				color-mix(in srgb, var(--color-onSurface) 25%, transparent)
+			);
 		background-size:
 			var(--word-progress, 0%) 100%,
 			100% 100%;
@@ -393,13 +406,7 @@
 		-webkit-background-clip: text;
 		color: transparent;
 		-webkit-text-fill-color: transparent;
-		transition: background-size 150ms linear;
-		will-change: background-size;
-	}
-
-	/* Past words in active line: fully filled */
-	.lyric-line.active .lyric-word.past-word {
-		--word-progress: 100%;
+		/* No transition — values arrive at 60fps from RAF, transition only adds jank */
 	}
 
 	.skeleton {
