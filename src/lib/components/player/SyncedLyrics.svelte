@@ -40,6 +40,8 @@
 	let loading = $state(false)
 	let scrollerElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
+	let isUserScrolling = $state(false)
+	let scrollTimeout: ReturnType<typeof setTimeout> | undefined
 	
 	let previousActiveIndex = -1
 
@@ -143,9 +145,20 @@
 	$effect(() => {
 		if (activeLineIndex !== previousActiveIndex) {
 			previousActiveIndex = activeLineIndex
-			scrollToActiveLine()
+			if (!isUserScrolling) {
+				scrollToActiveLine()
+			}
 		}
 	})
+
+	const handleScroll = () => {
+		isUserScrolling = true
+		clearTimeout(scrollTimeout)
+		scrollTimeout = setTimeout(() => {
+			isUserScrolling = false
+			scrollToActiveLine()
+		}, 3000)
+	}
 
 	const retry = () => {
 		reloadCount += 1
@@ -164,7 +177,7 @@
 {/snippet}
 
 <section 
-	class="lyrics-shell card" 
+	class="lyrics-shell w-full"
 	aria-live="polite" 
 	style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary, #D0BCFF)'}"
 >
@@ -197,7 +210,7 @@
 			</div>
 		</div>
 
-		<div class="lyrics-scroller" bind:this={scrollerElement}>
+		<div class="lyrics-scroller" bind:this={scrollerElement} onscroll={handleScroll}>
 			<div class="lyrics-spacer"></div>
 			{#each processedLines as line, lineIndex (lineIndex)}
 				{@const isActiveLine = lineIndex === activeLineIndex}
@@ -248,12 +261,8 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		max-height: 850px;
 		position: relative;
 		overflow: hidden;
-		background: var(--color-surface, #000000); 
-		border-radius: 1.75rem; 
-		box-shadow: 0 12px 48px rgba(0,0,0,0.4);
 	}
 
 	.ambient-glow-background {
@@ -272,6 +281,7 @@
 		filter: blur(40px); 
 		z-index: 0;
 		pointer-events: none;
+		opacity: 0.1;
 		transition: background 1.5s ease;
 		animation: subtle-drift 12s infinite alternate ease-in-out;
 		will-change: opacity, transform;
@@ -288,11 +298,6 @@
 		align-items: center;
 		padding: 1.5rem 2.5rem;
 		z-index: 10;
-		background: linear-gradient(
-			to bottom,
-			color-mix(in srgb, var(--color-surface, #000) 90%, transparent) 20%,
-			transparent 100%
-		);
 	}
 
 	.lyrics-scroller {
@@ -339,7 +344,7 @@
 		padding: 1rem 0;
 		margin: 0.5rem 0;
 		
-		font-family: var(--font-family-sans, system-ui, -apple-system, sans-serif);
+		font-family: var(--font-sans);
 		font-size: 2.25rem;
 		@media (min-width: 640px) { font-size: 2.5rem; }
 		@media (min-width: 1024px) { font-size: 3.25rem; }
@@ -350,7 +355,7 @@
 		white-space: pre-wrap;
 		user-select: none; 
 		
-		color: var(--color-onSurfaceVariant, #a0a0a0);
+		color: var(--color-onSurfaceVariant);
 		opacity: 0.35;
 		transform: scale(0.95); 
 		transform-origin: center left;
@@ -376,7 +381,7 @@
 	}
 
 	.lyric-line.active {
-		color: var(--color-onSurface, #ffffff);
+		color: var(--color-onSurface);
 		opacity: 1;
 		transform: scale(1);
 		font-weight: 800;
@@ -397,8 +402,8 @@
 	.lyric-word {
 		display: inline-block;
 		color: transparent;
-		background-color: var(--color-onSurfaceVariant, #555);
-		background-image: linear-gradient(var(--color-onSurface, #fff), var(--color-onSurface, #fff));
+		background-color: var(--color-onSurfaceVariant);
+		background-image: linear-gradient(var(--color-onSurface), var(--color-onSurface));
 		background-size: 0% 100%;
 		background-repeat: no-repeat;
 		
@@ -424,9 +429,9 @@
 		animation: ambient-shimmer 2.5s infinite ease-in-out;
 		background: linear-gradient(
 			90deg,
-			var(--color-surfaceContainerHighest, #222) 0%,
-			var(--color-surfaceContainer, #333) 50%,
-			var(--color-surfaceContainerHighest, #222) 100%
+			var(--color-surfaceContainerHighest) 0%,
+			var(--color-surfaceContainer) 50%,
+			var(--color-surfaceContainerHighest) 100%
 		);
 		background-size: 200% 100%;
 	}
