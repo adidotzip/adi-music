@@ -55,8 +55,7 @@
 
 	const getActiveWordIndex = (line: SyncedLyricsLine, timeMs: number): number => {
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
-			// 🔥 Fixed: Multiply seconds by 1000 to match timeMs!
-			if (timeMs >= line.words[i].time * 1000) {
+			if (timeMs >= line.words[i].time) {
 				return i
 			}
 		}
@@ -238,8 +237,10 @@
 					{#each line.words as word, wordIndex}
 						{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
 						{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
+						{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
+						{@const duration = nextTime - word.time || 200}
 						{@const wordProgress = isCurrentWord 
-							? Math.min(Math.max((currentTimeMs - word.time * 1000) / 200, 0), 1) * 100 
+							? Math.min(Math.max((currentTimeMs - word.time) / duration, 0), 1) * 100
 							: (isPastWord ? 100 : 0)}
 						
 						<span 
@@ -361,16 +362,16 @@
 		color: var(--color-onSurface, #ffffff);
 
 		opacity: 0.2;
-		transform: scale(0.95) rotateX(10deg);
+		transform: scale(0.95);
 		transform-origin: center left;
 		cursor: pointer;
 
 		will-change: transform, opacity, filter;
 
 		transition:
-			opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1),
-			transform 0.8s cubic-bezier(0.4, 0, 0.2, 1),
-			filter 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+			opacity 0.6s cubic-bezier(0.2, 0, 0, 1),
+			transform 0.6s cubic-bezier(0.2, 0, 0, 1),
+			filter 0.6s cubic-bezier(0.2, 0, 0, 1);
 		filter: blur(1.5px);
 	}
 
@@ -380,7 +381,7 @@
 
 	.lyric-line.active {
 		opacity: 1;
-		transform: scale(1.05) rotateX(0deg);
+		transform: scale(1.05);
 		filter: blur(0);
 	}
 
@@ -389,9 +390,9 @@
 		display: inline-block;
 		opacity: 0.3;
 		transition:
-			opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-			transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-			filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+			opacity 0.4s cubic-bezier(0.2, 0, 0, 1),
+			transform 0.4s cubic-bezier(0.2, 0, 0, 1),
+			filter 0.4s cubic-bezier(0.2, 0, 0, 1);
 		filter: blur(1px);
 	}
 
@@ -409,12 +410,12 @@
 		-webkit-text-fill-color: transparent;
 		opacity: 1;
 		filter: none;
-		transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.lyric-line.active .lyric-word.active-word {
 		transform: scale(1.05);
-		filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+		filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.15));
 	}
 
 	.lyric-line.past {
