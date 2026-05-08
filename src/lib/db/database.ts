@@ -88,6 +88,19 @@ export interface AppDB extends DBSchema {
 			}
 		}
 	}
+	lyrics: {
+		key: number
+		value: {
+			trackId: number
+			data: any
+			cachedAt: number
+		}
+		meta: {
+			operations: {
+				storeName: 'lyrics'
+			}
+		}
+	}
 }
 
 export type AppStoreNames = StoreNames<AppDB>
@@ -113,7 +126,7 @@ const createStore = <DBTypes extends DBSchema | unknown, Name extends StoreNames
 	})
 
 const openAppDatabase = () =>
-	openDB<AppDB>('snae-app-data', 3, {
+	openDB<AppDB>('snae-app-data', 4, {
 		async upgrade(db, oldVersion, _newVersion, tx) {
 			const { objectStoreNames } = db
 
@@ -211,6 +224,12 @@ const openAppDatabase = () =>
 				const store = createStore(db, 'playHistory')
 				createIndexes(store, ['trackId'], { unique: true })
 				createIndexes(store, ['playedAt'])
+			}
+
+			if (!objectStoreNames.contains('lyrics')) {
+				db.createObjectStore('lyrics', {
+					keyPath: 'trackId',
+				})
 			}
 		},
 	})
