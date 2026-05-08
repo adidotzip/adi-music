@@ -31,9 +31,10 @@
 	interface Props {
 		track: TrackData | undefined
 		currentTimeMs: number
+		class?: string
 	}
 
-	let { track, currentTimeMs }: Props = $props()
+	let { track, currentTimeMs, class: className }: Props = $props()
 	const player = usePlayer()
 
 	let result: SyncedLyricsResult | undefined = $state()
@@ -41,6 +42,7 @@
 	let scrollerElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
 	let isUserScrolling = $state(false)
+	let isProgrammaticScroll = false
 	let userScrollTimeout: ReturnType<typeof setTimeout>
 	
 	let previousActiveIndex = -1
@@ -133,9 +135,10 @@
 
 		const targetScroll =
 			activeEl.offsetTop -
-			scrollerElement.clientHeight / 2 +
-			activeEl.clientHeight / 2
+			scrollerElement.offsetHeight / 2 +
+			activeEl.offsetHeight / 2
 
+		isProgrammaticScroll = true
 		scrollerElement.scrollTo({
 			top: targetScroll,
 			behavior: smooth ? 'smooth' : 'auto'
@@ -156,6 +159,11 @@
 	}
 
 	const handleScroll = () => {
+		if (isProgrammaticScroll) {
+			isProgrammaticScroll = false
+			return
+		}
+
 		isUserScrolling = true
 		clearTimeout(userScrollTimeout)
 		userScrollTimeout = setTimeout(() => {
@@ -178,7 +186,7 @@
 {/snippet}
 
 <section 
-	class="lyrics-shell"
+	class={["lyrics-shell w-full", className]}
 	aria-live="polite" 
 	style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary)'}"
 >
@@ -202,17 +210,9 @@
 			{/each}
 		</div>
 	{:else if result?.status === 'found'}
-		<div class="lyrics-header">
-			<div class="min-w-0" lang={getItemLanguage(track.language)}>
-				<div class="text-onSurface truncate text-title-lg font-bold tracking-tight">{track.name}</div>
-				<div class="text-onSecondaryContainer/72 truncate text-body-md font-medium">
-					{formatArtists(track.artists)}
-				</div>
-			</div>
-		</div>
-
 		<div class="lyrics-scroller" bind:this={scrollerElement} onscroll={handleScroll}>
 			<div class="lyrics-spacer"></div>
+			<div class="lyrics-content mx-auto w-full max-w-200">
 			{#each processedLines as line, lineIndex (lineIndex)}
 				{@const isActiveLine = lineIndex === activeLineIndex}
 				{@const activeWordIdx = getActiveWordIndex(line, currentTimeMs)}
@@ -248,6 +248,7 @@
 					{/each}
 				</button>
 			{/each}
+			</div>
 			<div class="lyrics-spacer"></div>
 		</div>
 	{:else if result?.status === 'instrumental'}
@@ -278,49 +279,44 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+		min-height: 0;
 		position: relative;
 		overflow: hidden;
 		background: transparent;
+		animation: fade-in 0.8s var(--ease-standard);
 	}
 
 	.ambient-glow-background {
 		position: absolute;
 		inset: 0;
 		background: radial-gradient(
-			120% 120% at 50% 0%,
-			color-mix(in srgb, var(--primary-color) 20%, transparent) 0%,
+			140% 140% at 50% 0%,
+			color-mix(in srgb, var(--primary-color) 25%, transparent) 0%,
 			transparent 100%
 		),
 		radial-gradient(
-			100% 100% at 50% 100%,
-			color-mix(in srgb, var(--primary-color) 10%, transparent) 0%,
+			120% 120% at 50% 100%,
+			color-mix(in srgb, var(--primary-color) 15%, transparent) 0%,
 			transparent 100%
 		);
-		filter: blur(60px);
+		filter: blur(80px);
 		z-index: 0;
 		pointer-events: none;
 		transition: background 1.5s ease;
-		animation: subtle-drift 15s infinite alternate ease-in-out;
+		animation: subtle-drift 20s infinite alternate ease-in-out;
 		will-change: opacity, transform;
 	}
 
 	@keyframes subtle-drift {
-		0% { opacity: 0.6; transform: scale(1) translateY(0); }
-		100% { opacity: 0.9; transform: scale(1.1) translateY(-2%); }
-	}
-
-	.lyrics-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1.5rem 2.5rem;
-		z-index: 10;
+		0% { opacity: 0.5; transform: scale(1) translateY(0); }
+		100% { opacity: 0.8; transform: scale(1.15) translateY(-3%); }
 	}
 
 	.lyrics-scroller {
 		flex: 1;
 		overflow-y: auto;
-		padding: 0 2.5rem;
+		padding: 0 1rem;
+		@media (min-width: 640px) { padding: 0 2rem; }
 		z-index: 5;
 		
 		scrollbar-width: none; 
@@ -329,15 +325,15 @@
 		mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 20%,
-			black 80%,
+			black 15%,
+			black 85%,
 			transparent 100%
 		);
 		-webkit-mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 20%,
-			black 80%,
+			black 15%,
+			black 85%,
 			transparent 100%
 		);
 	}
@@ -385,17 +381,17 @@
 	.lyric-line {
 		display: block;
 		width: 100%;
-		text-align: left;
+		text-align: center;
 		background: transparent;
 		border: none;
-		padding: 1.25rem 0;
-		margin: 0.75rem 0;
+		padding: 1rem 0;
+		margin: 0.5rem 0;
 		contain: content;
 		
 		font-family: var(--font-sans);
-		font-size: 2rem;
-		@media (min-width: 640px) { font-size: 2.25rem; }
-		@media (min-width: 1024px) { font-size: 2.75rem; }
+		font-size: 1.75rem;
+		@media (min-width: 640px) { font-size: 2rem; }
+		@media (min-width: 1024px) { font-size: 2.5rem; }
 		
 		font-weight: 700;
 		line-height: 1.15;
@@ -405,8 +401,8 @@
 		
 		color: var(--color-onSurfaceVariant);
 		opacity: calc(0.3 / (1 + var(--distance) * 0.2));
-		transform: scale(calc(1 - var(--distance) * 0.02));
-		transform-origin: center left;
+		transform: scale(calc(1 - var(--distance) * 0.025));
+		transform-origin: center;
 		cursor: pointer;
 
 		will-change: transform, opacity;
@@ -420,7 +416,6 @@
 		font-size: 1.25rem;
 		@media (min-width: 640px) { font-size: 1.5rem; }
 		@media (min-width: 1024px) { font-size: 1.75rem; }
-		padding-left: 2rem;
 		margin-top: -0.5rem;
 		font-weight: 600;
 	}
@@ -433,9 +428,9 @@
 	.lyric-line.active {
 		color: var(--color-onSurface);
 		opacity: 1;
-		transform: scale(1.04);
+		transform: scale(1.05);
 		font-weight: 800;
-		text-shadow: 0 0 20px color-mix(in srgb, var(--primary-color) 30%, transparent);
+		text-shadow: 0 0 24px color-mix(in srgb, var(--primary-color) 40%, transparent);
 	}
 
 	.lyric-line.secondary-line.active {
