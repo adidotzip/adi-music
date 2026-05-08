@@ -41,6 +41,8 @@
 	let loading = $state(false)
 	let scrollerElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
+	
+	let previousActiveIndex = -1
 
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
@@ -49,10 +51,10 @@
 		foundResult?.source === 'lyricsplus' ? 'LyricsPlus' : 'LRCLIB',
 	)
 
-	// Explicitly pass timeMs to force Svelte's reactivity engine to update the {@const}
 	const getActiveWordIndex = (line: SyncedLyricsLine, timeMs: number): number => {
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
-			if (timeMs >= line.words[i].time) {
+			// 🔥 Fixed: Multiply seconds by 1000 to match timeMs!
+			if (timeMs >= line.words[i].time * 1000) {
 				return i
 			}
 		}
@@ -92,20 +94,35 @@
 		return () => controller.abort()
 	})
 
-	// Auto-scroll logic
+	// Highly optimized Auto-scroll logic
 	$effect(() => {
 		const index = activeLineIndex
-		if (index < 0 || !scrollerElement) {
+
+		if (
+			index < 0 ||
+			!scrollerElement ||
+			index === previousActiveIndex
+		) {
 			return
 		}
 
-		const activeEl = scrollerElement.querySelector(`[data-line-index="${index}"]`)
-		if (activeEl) {
-			activeEl.scrollIntoView({
-				block: 'center',
-				behavior: 'smooth',
-			})
-		}
+		previousActiveIndex = index
+
+		const activeEl = scrollerElement.querySelector<HTMLElement>(
+			`[data-line-index="${index}"]`,
+		)
+
+		if (!activeEl) return
+
+		const targetScroll =
+			activeEl.offsetTop -
+			scrollerElement.clientHeight / 2 +
+			activeEl.clientHeight / 2
+
+		scrollerElement.scrollTo({
+			top: targetScroll,
+			behavior: 'smooth',
+		})
 	})
 
 	const retry = () => {
@@ -162,10 +179,11 @@
 					onclick={() => player.seek(line.startTime / 1000)}
 				>
 					{#each line.words as word, wordIndex}
+						<!-- Added trailing space so words don't mash together! -->
 						<span 
 							class="lyric-word" 
 							class:active-word={isActiveLine && wordIndex <= activeWordIdx}
-						>{word.string}</span>
+						>{word.string + ' '}</span>
 					{/each}
 				</button>
 			{/each}
@@ -185,7 +203,7 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		max-height: 800px; /* Adjust based on your layout */
+		max-height: 800px;
 		position: relative;
 		overflow: hidden;
 	}
@@ -205,11 +223,9 @@
 		padding: 0 1.5rem;
 		scroll-behavior: smooth;
 		
-		/* Hides scrollbar for a cleaner Apple-like UI */
 		scrollbar-width: none; 
 		-ms-overflow-style: none;
 		
-		/* Smooth fade mask at the top and bottom edges */
 		mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
@@ -230,7 +246,6 @@
 		display: none;
 	}
 
-	/* Ensures the first and last lines can perfectly hit the center of the scroll view */
 	.lyrics-spacer {
 		height: 45vh; 
 	}
@@ -252,49 +267,39 @@
 		white-space: pre-wrap;
 		color: var(--color-onSurface, #ffffff);
 		
-		/* Inactive state (dimmed, scaled down, slightly blurred) */
-		opacity: 0.25;
-		transform: scale(0.95);
+		opacity: 0.3;
+		transform: scale(0.96);
 		transform-origin: left center;
-		filter: blur(1.5px);
 		cursor: pointer;
 		
-		/* Apple's signature springy transition */
+		will-change: transform, opacity;
+		
 		transition: opacity 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
-					transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
-					filter 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+					transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
 	}
 
 	.lyric-line:hover {
 		opacity: 0.5;
 	}
 
-	/* Active Line gets full emphasis */
 	.lyric-line.active {
 		opacity: 1;
 		transform: scale(1);
-		filter: blur(0);
 	}
 
-	/* Karaoke Word Highlighting */
+	/* Cleaned up specificity & added butter-smooth word transitions */
 	.lyric-word {
 		display: inline-block;
-		transition: opacity 0.2s ease, text-shadow 0.2s ease, color 0.2s ease;
+		opacity: 0.35;
+		transition:
+			opacity 0.25s linear,
+			transform 0.25s linear,
+			text-shadow 0.25s linear;
 	}
 
-	/* Words in the currently active line are dimmed until they are sung */
-	.lyric-line.active .lyric-word {
-		opacity: 0.4;
-	}
-
-	/* Sung words glow brightly */
 	.lyric-line.active .lyric-word.active-word {
 		opacity: 1;
-		text-shadow: 0 0 20px var(--alpha(var(--color-onSurface) / 30%));
-		
-		/* Optional: If you want a gradient fill instead of solid text */
-		/* background: linear-gradient(90deg, var(--color-primary), var(--color-tertiary));
-		background-clip: text;
-		-webkit-text-fill-color: transparent; */
+		transform: scale(1.02);
+		text-shadow: 0 0 20px rgb(255 255 255 / 0.3);
 	}
 </style>
