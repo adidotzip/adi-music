@@ -41,16 +41,14 @@
 	let loading = $state(false)
 	let scrollerElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
-	let isUserScrolling = $state(false)
-	let lastProgrammaticScrollTime = 0
-	let userScrollTimeout: ReturnType<typeof setTimeout>
 	
+	let isUserScrolling = $state(false)
+	let userScrollTimeout: ReturnType<typeof setTimeout>
 	let previousActiveIndex = -1
 
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
 
-	// Pre-process lines to detect secondary vocals/lyrics enclosed in ()
 	const processedLines = $derived(
 		lines.map((line) => {
 			let inSecondary = false
@@ -70,7 +68,6 @@
 				}
 			})
 
-			// Check if the entire line is wrapped in parentheses
 			const lineText = words.map((w) => w.string).join('').trim()
 			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
 
@@ -93,7 +90,6 @@
 		return -1
 	}
 
-	// Fetching logic
 	$effect(() => {
 		if (!track) {
 			result = undefined
@@ -124,7 +120,6 @@
 		return () => controller.abort()
 	})
 
-	// Premium hardware-accelerated smooth scrolling
 	const scrollToActiveLine = (smooth = true) => {
 		if (!scrollerElement || activeLineIndex < 0) return
 
@@ -138,7 +133,6 @@
 			scrollerElement.offsetHeight / 2 +
 			activeEl.offsetHeight / 2
 
-		lastProgrammaticScrollTime = Date.now()
 		scrollerElement.scrollTo({
 			top: targetScroll,
 			behavior: smooth ? 'smooth' : 'auto'
@@ -158,18 +152,14 @@
 		reloadCount += 1
 	}
 
-	const handleScroll = () => {
-		// Ignore scroll events for a short duration after a programmatic scroll starts
-		// Smooth scrolling can emit multiple scroll events over several hundred ms.
-		if (Date.now() - lastProgrammaticScrollTime < 1000) {
-			return
-		}
-
+	// Triggered strictly by physical user interactions, completely ignoring programmatic scrolls
+	const handleUserInteraction = () => {
 		isUserScrolling = true
 		clearTimeout(userScrollTimeout)
 		userScrollTimeout = setTimeout(() => {
 			isUserScrolling = false
-		}, 3000)
+			scrollToActiveLine()
+		}, 4000)
 	}
 </script>
 
@@ -211,7 +201,18 @@
 			{/each}
 		</div>
 	{:else if result?.status === 'found'}
-		<div class="lyrics-scroller" bind:this={scrollerElement} onscroll={handleScroll}>
+		<div 
+			class="lyrics-scroller" 
+			bind:this={scrollerElement} 
+			onwheel={handleUserInteraction}
+			ontouchmove={handleUserInteraction}
+			onmousedown={handleUserInteraction}
+			onkeydown={(e) => {
+				if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Space'].includes(e.code)) {
+					handleUserInteraction();
+				}
+			}}
+		>
 			<div class="lyrics-spacer"></div>
 			<div class="lyrics-content mx-auto w-full max-w-200">
 			{#each processedLines as line, lineIndex (lineIndex)}
@@ -229,6 +230,7 @@
 					style="--distance: {distance}"
 					onclick={() => {
 						player.seek(line.startTime / 1000);
+						isUserScrolling = false;
 					}}
 				>
 					{#each line.words as word, wordIndex}
@@ -242,10 +244,9 @@
 						
 						<span 
 							class="lyric-word" 
-							class:active-word={isCurrentWord}
 							class:secondary-word={word.isSecondary && !line.isSecondaryLine}
 							style="--word-progress: {wordProgress}%"
-						>{word.string}</span>{' '}
+						>{word.string}</span>
 					{/each}
 				</button>
 			{/each}
@@ -259,6 +260,7 @@
 	{:else}
 		{@render emptyState('alertCircle', 'Failed', 'Failed to load lyrics.')}
 	{/if}
+	
 	{#if isUserScrolling}
 		<button
 			class="return-to-active-btn"
@@ -314,6 +316,7 @@
 	}
 
 	.lyrics-scroller {
+		position: relative; /* REQUIRED: Anchors offsetTop for smooth scrolling */
 		flex: 1;
 		overflow-y: auto;
 		padding: 0 1rem;
@@ -377,8 +380,6 @@
 		transform: translateX(-50%) scale(0.95);
 	}
 
-	/* --- CLEAN, PERFORMANCE-OPTIMIZED TYPOGRAPHY --- */
-
 	.lyric-line {
 		display: block;
 		width: 100%;
@@ -406,11 +407,13 @@
 		transform-origin: center;
 		cursor: pointer;
 
-		will-change: transform, opacity;
+		will-change: transform, opacity, filter;
+		/* Premium Cubic-Bezier Smoothness */
 		transition:
-			opacity 0.8s var(--ease-standard),
-			transform 0.8s var(--ease-standard),
-			filter 0.8s var(--ease-standard);
+			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
+			transform 0.6s cubic-bezier(0.25, 1, 0.5, 1),
+			filter 0.6s cubic-bezier(0.25, 1, 0.5, 1),
+			color 0.4s ease;
 	}
 
 	.lyric-line.secondary-line {
@@ -445,15 +448,10 @@
 		filter: blur(1px);
 	}
 
-	/* Karaoke Fills */
+	/* Beautiful Multi-layer Karaoke Fills */
 	.lyric-word {
 		display: inline-block;
-		color: inherit;
-		background-image: linear-gradient(var(--color-onSurface), var(--color-onSurface));
-		background-size: 0% 100%;
-		background-repeat: no-repeat;
-		
-		transition: background-size 100ms linear;
+		transition: background-size 150ms linear, color 0.2s ease;
 		will-change: background-size;
 	}
 
@@ -463,11 +461,18 @@
 	}
 
 	.lyric-line.active .lyric-word {
-		color: transparent;
+		/* Top layer maps to the active fill, bottom layer maps to the inactive fill */
+		background-image: 
+			linear-gradient(var(--color-onSurface), var(--color-onSurface)),
+			linear-gradient(var(--color-onSurfaceVariant), var(--color-onSurfaceVariant));
+		background-size: 
+			var(--word-progress, 0%) 100%, 
+			100% 100%;
+		background-repeat: no-repeat;
+		
 		background-clip: text;
 		-webkit-background-clip: text;
-		background-size: var(--word-progress, 0%) 100%;
-		background-color: var(--color-onSurfaceVariant);
+		color: transparent;
 		-webkit-text-fill-color: transparent;
 	}
 
