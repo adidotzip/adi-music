@@ -31,15 +31,19 @@
 	interface Props {
 		track: TrackData | undefined
 		currentTimeMs: number
+		class?: string
 	}
 
-	let { track, currentTimeMs }: Props = $props()
+	let { track, currentTimeMs, class: className }: Props = $props()
 	const player = usePlayer()
 
 	let result: SyncedLyricsResult | undefined = $state()
 	let loading = $state(false)
 	let scrollerElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
+	let isUserScrolling = $state(false)
+	let lastProgrammaticScrollTime = 0
+	let userScrollTimeout: ReturnType<typeof setTimeout>
 	
 	let previousActiveIndex = -1
 
@@ -131,9 +135,10 @@
 
 		const targetScroll =
 			activeEl.offsetTop -
-			scrollerElement.clientHeight / 2 +
-			activeEl.clientHeight / 2
+			scrollerElement.offsetHeight / 2 +
+			activeEl.offsetHeight / 2
 
+		lastProgrammaticScrollTime = Date.now()
 		scrollerElement.scrollTo({
 			top: targetScroll,
 			behavior: smooth ? 'smooth' : 'auto'
@@ -143,30 +148,48 @@
 	$effect(() => {
 		if (activeLineIndex !== previousActiveIndex) {
 			previousActiveIndex = activeLineIndex
-			scrollToActiveLine()
+			if (!isUserScrolling) {
+				scrollToActiveLine()
+			}
 		}
 	})
 
 	const retry = () => {
 		reloadCount += 1
 	}
+
+	const handleScroll = () => {
+		// Ignore scroll events for a short duration after a programmatic scroll starts
+		// Smooth scrolling can emit multiple scroll events over several hundred ms.
+		if (Date.now() - lastProgrammaticScrollTime < 1000) {
+			return
+		}
+
+		isUserScrolling = true
+		clearTimeout(userScrollTimeout)
+		userScrollTimeout = setTimeout(() => {
+			isUserScrolling = false
+		}, 3000)
+	}
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
 	<div class="empty-state z-10 m-auto flex max-w-80 flex-col items-center text-center">
-		<Icon type={icon} class="color-onSecondaryContainer mb-4 size-24 opacity-54" />
-		<div class="text-title-md font-bold">{title}</div>
-		<div class="mt-2 text-body-md text-onSecondaryContainer/72">{description}</div>
+		<div class="mb-6 flex size-24 items-center justify-center rounded-full bg-secondaryContainer/30">
+			<Icon type={icon} class="color-onSecondaryContainer size-12 opacity-50" />
+		</div>
+		<div class="text-headline-sm font-bold tracking-tight">{title}</div>
+		<div class="mt-3 text-body-lg text-onSecondaryContainer/60">{description}</div>
 		{#if icon === 'alertCircle'}
-			<Button kind="outlined" class="mt-6" onclick={retry}>Reload</Button>
+			<Button kind="outlined" class="mt-8 rounded-full px-8" onclick={retry}>Retry</Button>
 		{/if}
 	</div>
 {/snippet}
 
 <section 
-	class="lyrics-shell card" 
+	class={["lyrics-shell w-full", className]}
 	aria-live="polite" 
-	style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary, #D0BCFF)'}"
+	style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary)'}"
 >
 	<div class="ambient-glow-background"></div>
 	
@@ -175,33 +198,26 @@
 	{:else if loading}
 		<div class="lyrics-header">
 			<div class="min-w-0">
-				<div class="skeleton bg-surfaceContainerHighest mb-2 h-7 w-36 rounded-md"></div>
-				<div class="skeleton bg-surfaceContainerHighest h-5 w-28 rounded-md opacity-70"></div>
+				<div class="skeleton mb-2 h-7 w-36 rounded-md"></div>
+				<div class="skeleton h-5 w-28 rounded-md opacity-70"></div>
 			</div>
 		</div>
 		<div class="lyrics-scroller overflow-hidden px-6 pt-12">
 			{#each Array(6) as _, i}
 				<div 
-					class="skeleton bg-surfaceContainerHighest mb-10 h-14 rounded-xl opacity-20"
+					class="skeleton mb-10 h-14 rounded-xl opacity-20"
 					style="width: {60 + Math.random() * 30}%; transform: translateX({i % 2 === 0 ? '0' : '5%'})"
 				></div>
 			{/each}
 		</div>
 	{:else if result?.status === 'found'}
-		<div class="lyrics-header">
-			<div class="min-w-0" lang={getItemLanguage(track.language)}>
-				<div class="text-onSurface truncate text-title-lg font-bold tracking-tight">{track.name}</div>
-				<div class="text-onSurfaceVariant truncate text-body-md font-medium">
-					{formatArtists(track.artists)}
-				</div>
-			</div>
-		</div>
-
-		<div class="lyrics-scroller" bind:this={scrollerElement}>
+		<div class="lyrics-scroller" bind:this={scrollerElement} onscroll={handleScroll}>
 			<div class="lyrics-spacer"></div>
+			<div class="lyrics-content mx-auto w-full max-w-200">
 			{#each processedLines as line, lineIndex (lineIndex)}
 				{@const isActiveLine = lineIndex === activeLineIndex}
 				{@const activeWordIdx = getActiveWordIndex(line, currentTimeMs)}
+				{@const distance = Math.abs(lineIndex - activeLineIndex)}
 
 				<button
 					type="button"
@@ -210,6 +226,7 @@
 					class:past={lineIndex < activeLineIndex}
 					class:secondary-line={line.isSecondaryLine}
 					data-line-index={lineIndex}
+					style="--distance: {distance}"
 					onclick={() => {
 						player.seek(line.startTime / 1000);
 					}}
@@ -232,6 +249,7 @@
 					{/each}
 				</button>
 			{/each}
+			</div>
 			<div class="lyrics-spacer"></div>
 		</div>
 	{:else if result?.status === 'instrumental'}
@@ -241,64 +259,65 @@
 	{:else}
 		{@render emptyState('alertCircle', 'Failed', 'Failed to load lyrics.')}
 	{/if}
+	{#if isUserScrolling}
+		<button
+			class="return-to-active-btn"
+			onclick={() => {
+				isUserScrolling = false;
+				scrollToActiveLine();
+			}}
+		>
+			<Icon type="chevronDown" class="mr-2 size-5" />
+			Return to current line
+		</button>
+	{/if}
 </section>
 
 <style lang="postcss">
+	@reference "../../../app.css";
+
 	.lyrics-shell {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		max-height: 850px;
+		min-height: 0;
 		position: relative;
 		overflow: hidden;
-		background: var(--color-surface, #000000); 
-		border-radius: 1.75rem; 
-		box-shadow: 0 12px 48px rgba(0,0,0,0.4);
+		background: transparent;
+		animation: fade-in 0.8s var(--ease-standard);
 	}
 
 	.ambient-glow-background {
 		position: absolute;
 		inset: 0;
 		background: radial-gradient(
-			100% 100% at 50% -10%,
+			140% 140% at 50% 0%,
 			color-mix(in srgb, var(--primary-color) 25%, transparent) 0%,
-			transparent 80%
+			transparent 100%
 		),
 		radial-gradient(
-			80% 120% at 50% 120%,
+			120% 120% at 50% 100%,
 			color-mix(in srgb, var(--primary-color) 15%, transparent) 0%,
 			transparent 100%
 		);
-		filter: blur(40px); 
+		filter: blur(80px);
 		z-index: 0;
 		pointer-events: none;
 		transition: background 1.5s ease;
-		animation: subtle-drift 12s infinite alternate ease-in-out;
+		animation: subtle-drift 20s infinite alternate ease-in-out;
 		will-change: opacity, transform;
 	}
 
 	@keyframes subtle-drift {
-		0% { opacity: 0.8; transform: scale(1); }
-		100% { opacity: 1; transform: scale(1.05); }
-	}
-
-	.lyrics-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1.5rem 2.5rem;
-		z-index: 10;
-		background: linear-gradient(
-			to bottom,
-			color-mix(in srgb, var(--color-surface, #000) 90%, transparent) 20%,
-			transparent 100%
-		);
+		0% { opacity: 0.5; transform: scale(1) translateY(0); }
+		100% { opacity: 0.8; transform: scale(1.15) translateY(-3%); }
 	}
 
 	.lyrics-scroller {
 		flex: 1;
 		overflow-y: auto;
-		padding: 0 2.5rem;
+		padding: 0 1rem;
+		@media (min-width: 640px) { padding: 0 2rem; }
 		z-index: 5;
 		
 		scrollbar-width: none; 
@@ -307,15 +326,15 @@
 		mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 15%, 
-			black 85%, 
+			black 15%,
+			black 85%,
 			transparent 100%
 		);
 		-webkit-mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 15%, 
-			black 85%, 
+			black 15%,
+			black 85%,
 			transparent 100%
 		);
 	}
@@ -325,7 +344,37 @@
 	}
 
 	.lyrics-spacer {
-		height: 40vh;
+		height: 45vh;
+	}
+
+	.return-to-active-btn {
+		position: absolute;
+		bottom: 2rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 20;
+		display: flex;
+		align-items: center;
+		padding: 0.75rem 1.25rem;
+		background: var(--color-primary);
+		color: var(--color-onPrimary);
+		border: none;
+		border-radius: 2rem;
+		font-weight: 600;
+		font-size: 0.875rem;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+		cursor: pointer;
+		transition: transform 0.2s var(--ease-standard), background 0.2s var(--ease-standard);
+		animation: fade-in 0.3s ease-out;
+	}
+
+	.return-to-active-btn:hover {
+		transform: translateX(-50%) scale(1.05);
+		background: color-mix(in srgb, var(--color-primary) 90%, white);
+	}
+
+	.return-to-active-btn:active {
+		transform: translateX(-50%) scale(0.95);
 	}
 
 	/* --- CLEAN, PERFORMANCE-OPTIMIZED TYPOGRAPHY --- */
@@ -333,100 +382,102 @@
 	.lyric-line {
 		display: block;
 		width: 100%;
-		text-align: left;
+		text-align: center;
 		background: transparent;
 		border: none;
 		padding: 1rem 0;
 		margin: 0.5rem 0;
+		contain: content;
 		
-		font-family: var(--font-family-sans, system-ui, -apple-system, sans-serif);
-		font-size: 2.25rem;
-		@media (min-width: 640px) { font-size: 2.5rem; }
-		@media (min-width: 1024px) { font-size: 3.25rem; }
+		font-family: var(--font-sans);
+		font-size: 1.75rem;
+		@media (min-width: 640px) { font-size: 2rem; }
+		@media (min-width: 1024px) { font-size: 2.5rem; }
 		
 		font-weight: 700;
-		line-height: 1.2;
-		letter-spacing: -0.02em;
+		line-height: 1.15;
+		letter-spacing: -0.03em;
 		white-space: pre-wrap;
 		user-select: none; 
 		
-		color: var(--color-onSurfaceVariant, #a0a0a0);
-		opacity: 0.35;
-		transform: scale(0.95); 
-		transform-origin: center left;
+		color: var(--color-onSurfaceVariant);
+		opacity: calc(0.5 / (1 + var(--distance) * 0.15));
+		transform: scale(calc(1 - var(--distance) * 0.025));
+		transform-origin: center;
 		cursor: pointer;
 
-		/* Only animate cheap properties */
 		will-change: transform, opacity;
 		transition:
-			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
-			transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+			opacity 0.8s var(--ease-standard),
+			transform 0.8s var(--ease-standard),
+			filter 0.8s var(--ease-standard);
 	}
 
 	.lyric-line.secondary-line {
-		font-size: 1.5rem;
-		@media (min-width: 640px) { font-size: 1.75rem; }
-		@media (min-width: 1024px) { font-size: 2.25rem; }
-		padding-left: 2rem;
-		margin-top: -0.25rem;
+		font-size: 1.25rem;
+		@media (min-width: 640px) { font-size: 1.5rem; }
+		@media (min-width: 1024px) { font-size: 1.75rem; }
+		margin-top: -0.5rem;
+		font-weight: 600;
 	}
 
 	.lyric-line:hover {
 		opacity: 0.6;
+		transform: scale(0.98);
 	}
 
 	.lyric-line.active {
-		color: var(--color-onSurface, #ffffff);
+		color: var(--color-onSurface);
 		opacity: 1;
-		transform: scale(1);
+		transform: scale(1.05);
 		font-weight: 800;
-		/* Subtle shadow for depth, no heavy bleeding */
-		text-shadow: 0 4px 16px rgba(0,0,0,0.4);
+		text-shadow: 0 0 24px color-mix(in srgb, var(--primary-color) 40%, transparent);
 	}
 
 	.lyric-line.secondary-line.active {
-		opacity: 0.85;
+		opacity: 0.9;
+		transform: scale(1.02);
 	}
 
 	.lyric-line.past {
-		opacity: 0.2;
-		transform: scale(0.9);
+		opacity: 0.15;
+		transform: scale(0.92);
+		filter: blur(1px);
 	}
 
 	/* Karaoke Fills */
 	.lyric-word {
 		display: inline-block;
-		color: transparent;
-		background-color: var(--color-onSurfaceVariant, #555);
-		background-image: linear-gradient(var(--color-onSurface, #fff), var(--color-onSurface, #fff));
+		color: inherit;
+		background-image: linear-gradient(var(--color-onSurface), var(--color-onSurface));
 		background-size: 0% 100%;
 		background-repeat: no-repeat;
 		
-		background-clip: text;
-		-webkit-background-clip: text;
-		
-		/* Smooths out the jumps between time update ticks */
-		transition: background-size 75ms linear;
+		transition: background-size 100ms linear;
 		will-change: background-size;
 	}
 
 	.lyric-word.secondary-word {
-		font-size: 0.8em;
+		font-size: 0.85em;
 		opacity: 0.8;
 	}
 
 	.lyric-line.active .lyric-word {
+		color: transparent;
+		background-clip: text;
+		-webkit-background-clip: text;
 		background-size: var(--word-progress, 0%) 100%;
+		background-color: var(--color-onSurfaceVariant);
 		-webkit-text-fill-color: transparent;
 	}
 
 	.skeleton {
-		animation: ambient-shimmer 2.5s infinite ease-in-out;
+		animation: ambient-shimmer 3s infinite ease-in-out;
 		background: linear-gradient(
 			90deg,
-			var(--color-surfaceContainerHighest, #222) 0%,
-			var(--color-surfaceContainer, #333) 50%,
-			var(--color-surfaceContainerHighest, #222) 100%
+			var(--color-surfaceContainerHighest) 0%,
+			var(--color-surfaceContainerHigh) 50%,
+			var(--color-surfaceContainerHighest) 100%
 		);
 		background-size: 200% 100%;
 	}
