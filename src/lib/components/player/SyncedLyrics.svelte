@@ -79,9 +79,6 @@
 	)
 
 	const activeLineIndex = $derived(getActiveLineIndex(processedLines, currentTimeMs))
-	const sourceLabel = $derived(
-		foundResult?.source === 'lyricsplus' ? 'LyricsPlus' : 'LRCLIB',
-	)
 
 	const getActiveWordIndex = (line: SyncedLyricsLine, timeMs: number): number => {
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
@@ -123,9 +120,7 @@
 		return () => controller.abort()
 	})
 
-	// Premium Fluid Scroll Animation Logic
-	let animationFrameId: number | undefined
-
+	// Premium hardware-accelerated smooth scrolling
 	const scrollToActiveLine = (smooth = true) => {
 		if (!scrollerElement || activeLineIndex < 0) return
 
@@ -139,47 +134,16 @@
 			scrollerElement.clientHeight / 2 +
 			activeEl.clientHeight / 2
 
-		if (Math.abs(scrollerElement.scrollTop - targetScroll) < 1) return
-
-		if (smooth) {
-			const startScroll = scrollerElement.scrollTop
-			const distance = targetScroll - startScroll
-			const duration = 850 
-			let startTime: number | null = null
-
-			const animate = (timestamp: DOMHighResTimeStamp) => {
-				if (!startTime) startTime = timestamp
-				const timeElapsed = timestamp - startTime
-				let progress = Math.min(timeElapsed / duration, 1)
-
-				const ease = 1 - Math.pow(1 - progress, 4)
-
-				if (scrollerElement) {
-					scrollerElement.scrollTop = startScroll + distance * ease
-				}
-
-				if (progress < 1) {
-					animationFrameId = requestAnimationFrame(animate)
-				}
-			}
-
-			if (animationFrameId) cancelAnimationFrame(animationFrameId)
-			animationFrameId = requestAnimationFrame(animate)
-		} else {
-			scrollerElement.scrollTop = targetScroll
-		}
+		scrollerElement.scrollTo({
+			top: targetScroll,
+			behavior: smooth ? 'smooth' : 'auto'
+		})
 	}
 
 	$effect(() => {
 		if (activeLineIndex !== previousActiveIndex) {
 			previousActiveIndex = activeLineIndex
 			scrollToActiveLine()
-		}
-	})
-
-	$effect(() => {
-		return () => {
-			if (animationFrameId) cancelAnimationFrame(animationFrameId)
 		}
 	})
 
@@ -194,7 +158,7 @@
 		<div class="text-title-md font-bold">{title}</div>
 		<div class="mt-2 text-body-md text-onSecondaryContainer/72">{description}</div>
 		{#if icon === 'alertCircle'}
-			<Button kind="outlined" class="mt-6" onclick={retry}>{m.reload()}</Button>
+			<Button kind="outlined" class="mt-6" onclick={retry}>Reload</Button>
 		{/if}
 	</div>
 {/snippet}
@@ -230,9 +194,6 @@
 				<div class="text-onSurfaceVariant truncate text-body-md font-medium">
 					{formatArtists(track.artists)}
 				</div>
-			</div>
-			<div class="source-badge">
-				{sourceLabel}
 			</div>
 		</div>
 
@@ -300,12 +261,12 @@
 		inset: 0;
 		background: radial-gradient(
 			100% 100% at 50% -10%,
-			color-mix(in srgb, var(--primary-color) 30%, transparent) 0%,
+			color-mix(in srgb, var(--primary-color) 25%, transparent) 0%,
 			transparent 80%
 		),
 		radial-gradient(
 			80% 120% at 50% 120%,
-			color-mix(in srgb, var(--primary-color) 20%, transparent) 0%,
+			color-mix(in srgb, var(--primary-color) 15%, transparent) 0%,
 			transparent 100%
 		);
 		filter: blur(40px); 
@@ -317,8 +278,8 @@
 	}
 
 	@keyframes subtle-drift {
-		0% { opacity: 0.7; transform: scale(1) translateY(0); }
-		100% { opacity: 1; transform: scale(1.05) translateY(-2%); }
+		0% { opacity: 0.8; transform: scale(1); }
+		100% { opacity: 1; transform: scale(1.05); }
 	}
 
 	.lyrics-header {
@@ -329,29 +290,15 @@
 		z-index: 10;
 		background: linear-gradient(
 			to bottom,
-			color-mix(in srgb, var(--color-surface, #000) 80%, transparent) 10%,
+			color-mix(in srgb, var(--color-surface, #000) 90%, transparent) 20%,
 			transparent 100%
 		);
-	}
-
-	.source-badge {
-		background: color-mix(in srgb, var(--primary-color) 15%, var(--color-surfaceContainerHighest, #222));
-		color: var(--primary-color);
-		padding: 0.375rem 0.875rem;
-		border-radius: 999px; 
-		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		backdrop-filter: blur(12px);
-		border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
 	}
 
 	.lyrics-scroller {
 		flex: 1;
 		overflow-y: auto;
 		padding: 0 2.5rem;
-		scroll-behavior: auto; 
 		z-index: 5;
 		
 		scrollbar-width: none; 
@@ -360,18 +307,17 @@
 		mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 20%, 
-			black 80%, 
+			black 15%, 
+			black 85%, 
 			transparent 100%
 		);
 		-webkit-mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 20%, 
-			black 80%, 
+			black 15%, 
+			black 85%, 
 			transparent 100%
 		);
-		will-change: scroll-position;
 	}
 
 	.lyrics-scroller::-webkit-scrollbar {
@@ -379,10 +325,10 @@
 	}
 
 	.lyrics-spacer {
-		height: 45vh;
+		height: 40vh;
 	}
 
-	/* --- PREMIUM APPLE-STYLE TYPOGRAPHY --- */
+	/* --- CLEAN, PERFORMANCE-OPTIMIZED TYPOGRAPHY --- */
 
 	.lyric-line {
 		display: block;
@@ -399,62 +345,55 @@
 		@media (min-width: 1024px) { font-size: 3.25rem; }
 		
 		font-weight: 700;
-		line-height: 1.15;
-		letter-spacing: -0.03em;
+		line-height: 1.2;
+		letter-spacing: -0.02em;
 		white-space: pre-wrap;
 		user-select: none; 
 		
 		color: var(--color-onSurfaceVariant, #a0a0a0);
-		opacity: 0.25;
-		filter: blur(3px);
-		transform: scale(0.9) translate3d(0, 15px, 0); 
+		opacity: 0.35;
+		transform: scale(0.95); 
 		transform-origin: center left;
 		cursor: pointer;
 
-		will-change: transform, opacity, filter;
-
+		/* Only animate cheap properties */
+		will-change: transform, opacity;
 		transition:
-			opacity 0.8s cubic-bezier(0.25, 1, 0.5, 1),
-			transform 0.8s cubic-bezier(0.25, 1, 0.5, 1),
-			filter 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
+			transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
 	}
 
-	/* Secondary Lines Styling */
 	.lyric-line.secondary-line {
 		font-size: 1.5rem;
 		@media (min-width: 640px) { font-size: 1.75rem; }
 		@media (min-width: 1024px) { font-size: 2.25rem; }
 		padding-left: 2rem;
-		margin-top: -0.25rem; /* Tucks the backing vocals closer to the main line */
+		margin-top: -0.25rem;
 	}
 
 	.lyric-line:hover {
 		opacity: 0.6;
-		filter: blur(1px);
-		transform: scale(0.95) translate3d(0, 5px, 0);
 	}
 
 	.lyric-line.active {
 		color: var(--color-onSurface, #ffffff);
 		opacity: 1;
-		filter: blur(0px);
-		transform: scale(1) translate3d(0, 0, 0);
+		transform: scale(1);
 		font-weight: 800;
-		text-shadow: 0 12px 40px color-mix(in srgb, var(--primary-color) 35%, transparent);
+		/* Subtle shadow for depth, no heavy bleeding */
+		text-shadow: 0 4px 16px rgba(0,0,0,0.4);
 	}
 
 	.lyric-line.secondary-line.active {
-		opacity: 0.85; /* Keep backing vocals slightly muted even when active */
-		text-shadow: 0 8px 30px color-mix(in srgb, var(--primary-color) 25%, transparent);
+		opacity: 0.85;
 	}
 
 	.lyric-line.past {
-		opacity: 0.15;
-		filter: blur(5px);
-		transform: scale(0.85) translate3d(0, -20px, 0);
+		opacity: 0.2;
+		transform: scale(0.9);
 	}
 
-	/* Elegant Text Fills */
+	/* Karaoke Fills */
 	.lyric-word {
 		display: inline-block;
 		color: transparent;
@@ -465,10 +404,8 @@
 		
 		background-clip: text;
 		-webkit-background-clip: text;
-		transform-origin: bottom left;
 	}
 
-	/* Secondary Word Styling for inline lyrics */
 	.lyric-word.secondary-word {
 		font-size: 0.8em;
 		opacity: 0.8;
@@ -479,7 +416,6 @@
 		-webkit-text-fill-color: transparent;
 	}
 
-	/* Skeleton Loaders */
 	.skeleton {
 		animation: ambient-shimmer 2.5s infinite ease-in-out;
 		background: linear-gradient(
