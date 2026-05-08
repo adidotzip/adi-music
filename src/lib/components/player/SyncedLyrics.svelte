@@ -20,7 +20,6 @@
 <script lang="ts">
 	import Button from '$lib/components/Button.svelte'
 	import Icon from '$lib/components/icon/Icon.svelte'
-	import Spinner from '$lib/components/Spinner.svelte'
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import type { TrackData } from '$lib/library/get/value.ts'
 	import {
@@ -35,7 +34,7 @@
 	}
 
 	let { track, currentTimeMs }: Props = $props()
-	const player = usePlayer() // Assuming this is globally available or imported in your real code
+	const player = usePlayer()
 
 	let result: SyncedLyricsResult | undefined = $state()
 	let loading = $state(false)
@@ -81,9 +80,7 @@
 				}
 			})
 			.catch((error: unknown) => {
-				if (error instanceof Error && error.name === 'AbortError') {
-					return
-				}
+				if (error instanceof Error && error.name === 'AbortError') return
 				result = { status: 'error' }
 			})
 			.finally(() => {
@@ -106,6 +103,7 @@
 		)
 		if (!activeEl) return
 
+		// Center the active line perfectly
 		const targetScroll =
 			activeEl.offsetTop -
 			scrollerElement.clientHeight / 2 +
@@ -116,7 +114,7 @@
 		if (smooth) {
 			const startScroll = scrollerElement.scrollTop
 			const distance = targetScroll - startScroll
-			const duration = 750 // Slightly longer for M3 expressive settling
+			const duration = 850 // Extended slightly for dramatic M3 settling
 			let startTime: number | null = null
 
 			const animate = (currentTime: number) => {
@@ -124,9 +122,8 @@
 				const timeElapsed = currentTime - startTime
 				const progress = Math.min(timeElapsed / duration, 1)
 
-				// Material 3 Emphasized Decelerate (Quartic Ease-Out Approximation)
-				// Fast out of the gate, long smooth settle.
-				const ease = 1 - Math.pow(1 - progress, 4)
+				// M3 Emphasized Decelerate Math (Cubic-Bezier 0.05, 0.7, 0.1, 1 approximation)
+				const ease = 1 - Math.pow(1 - progress, 5)
 
 				if (scrollerElement && !isUserScrolling) {
 					scrollerElement.scrollTop = startScroll + distance * ease
@@ -137,7 +134,7 @@
 				}
 			}
 
-			cancelAnimationFrame(animationFrameId!)
+			if (animationFrameId) cancelAnimationFrame(animationFrameId)
 			animationFrameId = requestAnimationFrame(animate)
 		} else {
 			scrollerElement.scrollTop = targetScroll
@@ -157,12 +154,14 @@
 		}
 	})
 
+	// Respect user intent: pause auto-scrolling if they touch/scroll
 	const handleScroll = () => {
 		isUserScrolling = true
 		clearTimeout(userScrollTimeout)
 		userScrollTimeout = window.setTimeout(() => {
 			isUserScrolling = false
-		}, 3000) // Give them a bit more time before snapping back
+			scrollToActiveLine() // Snap back when they let go
+		}, 3500) 
 	}
 
 	const retry = () => {
@@ -181,11 +180,15 @@
 	</div>
 {/snippet}
 
-<section class="lyrics-shell card" aria-live="polite" style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-surfaceContainerLow)'}">
+<section 
+	class="lyrics-shell card" 
+	aria-live="polite" 
+	style="--primary-color: {track?.primaryColor ? `rgb(${((track.primaryColor >> 16) & 0xFF)}, ${((track.primaryColor >> 8) & 0xFF)}, ${(track.primaryColor & 0xFF)})` : 'var(--color-primary, #D0BCFF)'}"
+>
 	<div class="m3-tonal-background"></div>
 	
 	{#if !track}
-		{@render emptyState('musicNote', m.lyricsNoTrack(), m.lyricsNoTrackExplanation())}
+		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
 	{:else if loading}
 		<div class="lyrics-header">
 			<div class="min-w-0">
@@ -197,7 +200,7 @@
 			{#each Array(6) as _, i}
 				<div 
 					class="skeleton mb-10 h-14 rounded-xl bg-surfaceContainerHighest opacity-20"
-					style="width: {60 + Math.random() * 30}%;"
+					style="width: {60 + Math.random() * 30}%; transform: translateX({i % 2 === 0 ? '0' : '5%'})"
 				></div>
 			{/each}
 		</div>
@@ -232,7 +235,10 @@
 					class:active={isActiveLine}
 					class:past={lineIndex < activeLineIndex}
 					data-line-index={lineIndex}
-					onclick={() => player.seek(line.startTime / 1000)}
+					onclick={() => {
+						isUserScrolling = false;
+						player.seek(line.startTime / 1000);
+					}}
 				>
 					{#each line.words as word, wordIndex}
 						{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
@@ -245,7 +251,7 @@
 						
 						<span 
 							class="lyric-word" 
-							class:active-word={isActiveLine && wordIndex <= activeWordIdx}
+							class:active-word={isCurrentWord}
 							style="--word-progress: {wordProgress}%"
 						>{word.string}</span>{' '}
 					{/each}
@@ -254,11 +260,11 @@
 			<div class="lyrics-spacer"></div>
 		</div>
 	{:else if result?.status === 'instrumental'}
-		{@render emptyState('musicNote', m.lyricsInstrumental(), m.lyricsInstrumentalExplanation())}
+		{@render emptyState('musicNote', 'Instrumental', 'This track is instrumental.')}
 	{:else if result?.status === 'not-found'}
-		{@render emptyState('musicNote', m.lyricsNotFound(), m.lyricsNotFoundExplanation())}
+		{@render emptyState('musicNote', 'Not Found', 'Could not find lyrics for this track.')}
 	{:else}
-		{@render emptyState('alertCircle', m.lyricsFailed(), m.lyricsFailedExplanation())}
+		{@render emptyState('alertCircle', 'Failed', 'Failed to load lyrics.')}
 	{/if}
 </section>
 
@@ -271,46 +277,48 @@
 		position: relative;
 		overflow: hidden;
 		background: var(--color-surface, #121212);
-		border-radius: 1.5rem; /* M3 Extra Large shape */
+		border-radius: 1.75rem; /* M3 Extra Large shape */
+		box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 	}
 
 	.m3-tonal-background {
 		position: absolute;
 		inset: 0;
 		background: radial-gradient(
-			ellipse at 0% 0%,
-			color-mix(in srgb, var(--primary-color) 25%, transparent) 0%,
-			transparent 60%
+			120% 120% at 50% -10%,
+			color-mix(in srgb, var(--primary-color) 20%, transparent) 0%,
+			transparent 80%
 		),
 		radial-gradient(
-			ellipse at 100% 100%,
-			color-mix(in srgb, var(--primary-color) 20%, transparent) 0%,
-			transparent 60%
+			80% 80% at 50% 110%,
+			color-mix(in srgb, var(--primary-color) 15%, transparent) 0%,
+			transparent 100%
 		);
 		z-index: 0;
 		pointer-events: none;
+		transition: background 1s ease;
 	}
 
 	.lyrics-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 1.25rem 1.75rem;
+		padding: 1.5rem 2rem;
 		z-index: 10;
 		background: linear-gradient(
 			to bottom,
-			var(--color-surface, #121212) 60%,
+			var(--color-surface, #121212) 40%,
 			transparent 100%
 		);
 	}
 
 	.source-badge {
-		background: var(--color-surfaceContainerHighest, #333);
-		color: var(--color-onSurfaceVariant, #ccc);
-		padding: 0.375rem 0.75rem;
-		border-radius: 0.5rem; /* M3 Small shape */
+		background: color-mix(in srgb, var(--primary-color) 20%, var(--color-surfaceContainerHighest, #333));
+		color: var(--primary-color);
+		padding: 0.375rem 0.875rem;
+		border-radius: 0.5rem; 
 		font-size: 0.75rem;
-		font-weight: 600;
+		font-weight: 700;
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 	}
@@ -318,8 +326,8 @@
 	.lyrics-scroller {
 		flex: 1;
 		overflow-y: auto;
-		padding: 0 2rem;
-		scroll-behavior: smooth;
+		padding: 0 2.5rem;
+		scroll-behavior: auto; /* Handled gracefully by JS */
 		
 		scrollbar-width: none; 
 		-ms-overflow-style: none;
@@ -327,15 +335,15 @@
 		mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 15%, 
-			black 85%, 
+			black 20%, 
+			black 80%, 
 			transparent 100%
 		);
 		-webkit-mask-image: linear-gradient(
 			to bottom, 
 			transparent 0%, 
-			black 15%, 
-			black 85%, 
+			black 20%, 
+			black 80%, 
 			transparent 100%
 		);
 	}
@@ -345,7 +353,7 @@
 	}
 
 	.lyrics-spacer {
-		height: 40vh;
+		height: 45vh;
 	}
 
 	/* --- MATERIAL 3 EXPRESSIVE TYPOGRAPHY & MOTION --- */
@@ -356,64 +364,74 @@
 		text-align: left;
 		background: transparent;
 		border: none;
-		padding: 1rem 0;
-		margin: 0.75rem 0;
+		padding: 1.25rem 0;
+		margin: 0.5rem 0;
 		
 		/* M3 Display Typography */
 		font-family: var(--font-family-sans, system-ui, sans-serif);
-		font-size: 2rem;
-		@media (min-width: 640px) { font-size: 2.5rem; }
-		@media (min-width: 1024px) { font-size: 3rem; }
+		font-size: 2.25rem;
+		@media (min-width: 640px) { font-size: 2.75rem; }
+		@media (min-width: 1024px) { font-size: 3.25rem; }
 		
 		font-weight: 700;
-		line-height: 1.2;
-		letter-spacing: -0.02em; /* Tighter for expressive headlines */
+		line-height: 1.15;
+		letter-spacing: -0.03em;
 		white-space: pre-wrap;
 		
 		color: var(--color-onSurfaceVariant, #a0a0a0);
-		opacity: 0.4;
-		transform: scale(0.92) translateX(-1%);
+		opacity: 0.3;
+		filter: blur(3px); /* Expressive depth */
+		transform: scale(0.95) translateY(10px);
 		transform-origin: center left;
 		cursor: pointer;
 
-		will-change: transform, opacity, color;
+		will-change: transform, opacity, filter;
 
-		/* M3 Emphasized Decelerate */
+		/* Standard M3 Emphasized Decelerate */
 		transition:
-			opacity 0.6s cubic-bezier(0.2, 0, 0, 1),
-			transform 0.6s cubic-bezier(0.2, 0, 0, 1),
-			color 0.6s cubic-bezier(0.2, 0, 0, 1);
+			opacity 0.7s cubic-bezier(0.2, 0, 0, 1),
+			transform 0.7s cubic-bezier(0.2, 0, 0, 1),
+			filter 0.7s cubic-bezier(0.2, 0, 0, 1),
+			color 0.7s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.lyric-line:hover {
-		opacity: 0.7;
+		opacity: 0.6;
+		filter: blur(1px);
 	}
 
 	.lyric-line.active {
 		color: var(--color-onSurface, #ffffff);
 		opacity: 1;
-		transform: scale(1) translateX(0);
-		font-weight: 800; /* Extra punch for active line */
+		filter: blur(0px);
+		transform: scale(1.05) translateY(0);
+		font-weight: 800;
 	}
 
+	.lyric-line.past {
+		opacity: 0.15;
+		filter: blur(4px);
+		transform: scale(0.92) translateY(-10px);
+	}
+
+	/* Word Level Animations */
 	.lyric-word {
 		display: inline-block;
 		color: transparent;
-		/* Base state is the inactive color */
-		background: var(--color-onSurfaceVariant, #a0a0a0);
+		background: var(--color-onSurfaceVariant, #555);
 		background-clip: text;
 		-webkit-background-clip: text;
 		
-		transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1);
+		/* Smooth snapping for individual words */
+		transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 	}
 
 	.lyric-line.active .lyric-word {
-		/* When active, map the progress gradient */
 		background: linear-gradient(
 			to right,
-			var(--color-primary, #d0bcff) 0%,
-			var(--color-primary, #d0bcff) var(--word-progress, 0%),
-			var(--color-onSurfaceVariant, #a0a0a0) var(--word-progress, 0%)
+			var(--primary-color) 0%,
+			var(--primary-color) var(--word-progress, 0%),
+			var(--color-onSurfaceVariant, #555) var(--word-progress, 0%)
 		);
 		background-size: 100% 100%;
 		background-clip: text;
@@ -422,18 +440,13 @@
 	}
 
 	.lyric-line.active .lyric-word.active-word {
-		/* Subtle pop for the exact word being sung */
-		transform: scale(1.02) translateY(-2px);
+		/* Karaoke "Bounce" */
+		transform: translateY(-4px) scale(1.05);
 	}
 
-	.lyric-line.past {
-		opacity: 0.25;
-		transform: scale(0.92) translateX(0);
-	}
-
-	/* M3 Standard Skeleton Loader */
+	/* Skeleton Loaders */
 	.skeleton {
-		animation: m3-shimmer 2s infinite linear;
+		animation: m3-shimmer 2.5s infinite linear;
 		background: linear-gradient(
 			90deg,
 			var(--color-surfaceContainerHighest, #333) 0%,
