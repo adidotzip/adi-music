@@ -27,6 +27,7 @@
 		type SyncedLyricsLine,
 		type SyncedLyricsResult,
 	} from '$lib/lyrics/synced-lyrics.ts'
+	import { spring } from 'svelte/motion'
 
 	interface Props {
 		track: TrackData | undefined
@@ -43,6 +44,8 @@
 	let reloadCount = $state(0)
 	let isUserScrolling = $state(false)
 	let userScrollTimeout: ReturnType<typeof setTimeout>
+
+	let scrollY = spring(0, { stiffness: 0.05, damping: 0.8 })
 
 	// ─── RAF-driven smooth time ───────────────────────────────────────────────
 	// Instead of relying on prop updates for word-progress, we maintain a
@@ -151,15 +154,20 @@
 		return () => controller.abort()
 	})
 
-	const scrollToActiveLine = (smooth = true) => {
+	const updateScrollTarget = () => {
 		if (!scrollerElement || activeLineIndex < 0) return
 		const activeEl = scrollerElement.querySelector<HTMLElement>(
 			`[data-line-index="${activeLineIndex}"]`,
 		)
 		if (!activeEl) return
+
+		const scrollerRect = scrollerElement.getBoundingClientRect()
+		const activeRect = activeEl.getBoundingClientRect()
+
 		const targetScroll =
-			activeEl.offsetTop - scrollerElement.offsetHeight / 2 + activeEl.offsetHeight / 2
-		scrollerElement.scrollTo({ top: targetScroll, behavior: smooth ? 'smooth' : 'auto' })
+			scrollerElement.scrollTop + activeRect.top - scrollerRect.top - scrollerRect.height / 2 + activeRect.height / 2
+
+		scrollY.set(targetScroll)
 	}
 
 	// ─── Auto-scroll fix ──────────────────────────────────────────────────────
@@ -169,8 +177,19 @@
 		const idx = activeLineIndex // <-- reactive read tracked by Svelte
 		void idx                    // prevent tree-shaking
 		if (!isUserScrolling) {
-			scrollToActiveLine()
+			updateScrollTarget()
 		}
+	})
+
+	$effect(() => {
+		const unsub = scrollY.subscribe(v => {
+			if (scrollerElement && !isUserScrolling) {
+				if (Math.abs(scrollerElement.scrollTop - v) > 1) {
+					scrollerElement.scrollTop = v
+				}
+			}
+		})
+		return unsub
 	})
 	// ─────────────────────────────────────────────────────────────────────────
 
@@ -180,8 +199,11 @@
 		isUserScrolling = true
 		clearTimeout(userScrollTimeout)
 		userScrollTimeout = setTimeout(() => {
+			if (scrollerElement) {
+				scrollY.set(scrollerElement.scrollTop, { hard: true })
+			}
 			isUserScrolling = false
-			scrollToActiveLine()
+			updateScrollTarget()
 		}, 4000)
 	}
 </script>
@@ -202,11 +224,14 @@
 <section
 	class={["lyrics-shell w-full", className]}
 	aria-live="polite"
+	style="--bg-color: {track?.primaryColor ? '#' + track.primaryColor.toString(16).padStart(6, '0') : 'transparent'}"
 >
+	<div class="lyrics-bg"></div>
+
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
 	{:else if loading}
-		<div class="lyrics-scroller overflow-hidden px-6 pt-12">
+		<div class="lyrics-scroller overflow-hidden px-6 sm:px-12 pt-[env(safe-area-inset-top,3rem)] pb-[env(safe-area-inset-bottom,3rem)] overscroll-y-none">
 			{#each Array(6) as _, i}
 				<div
 					class="skeleton mb-10 h-14 rounded-xl opacity-20"
@@ -216,7 +241,7 @@
 		</div>
 	{:else if result?.status === 'found'}
 		<div
-			class="lyrics-scroller"
+			class="lyrics-scroller overflow-y-auto overflow-x-hidden overscroll-y-none px-6 sm:px-12 pt-[env(safe-area-inset-top,3rem)] pb-[env(safe-area-inset-bottom,3rem)]"
 			bind:this={scrollerElement}
 			onwheel={handleUserInteraction}
 			ontouchmove={handleUserInteraction}
@@ -291,6 +316,20 @@
 		animation: fade-in 0.8s var(--ease-standard);
 	}
 
+	.lyrics-bg {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			circle at 50% 50%,
+			color-mix(in srgb, var(--bg-color) 40%, transparent) 0%,
+			transparent 100%
+		);
+		opacity: 0.6;
+		transition: background 1s ease;
+	}
+
 	.lyrics-scroller {
 		position: relative;
 		flex: 1;
@@ -318,7 +357,7 @@
 
 	.lyrics-scroller::-webkit-scrollbar { display: none; }
 
-	.lyrics-spacer { height: 45vh; }
+	.lyrics-spacer { height: 50vh; }
 
 	.lyric-line {
 		display: block;
@@ -334,8 +373,8 @@
 		@media (min-width: 640px) { font-size: 2rem; }
 		@media (min-width: 1024px) { font-size: 2.5rem; }
 		font-weight: 700;
-		line-height: 1.15;
-		letter-spacing: -0.03em;
+		line-height: 1.1;
+		letter-spacing: -0.04em;
 		white-space: pre-wrap;
 		user-select: none;
 		color: var(--color-onSurfaceVariant);
@@ -343,6 +382,7 @@
 		transform: scale(calc(1 - var(--distance) * 0.025));
 		transform-origin: center;
 		cursor: pointer;
+		filter: blur(calc(max(var(--distance) - 1, 0) * 1.5px));
 		will-change: transform, opacity, filter;
 		transition:
 			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
@@ -359,13 +399,14 @@
 		font-weight: 600;
 	}
 
-	.lyric-line:hover { opacity: 0.6; transform: scale(0.98); }
+	.lyric-line:hover { opacity: 0.6; transform: scale(0.98); filter: blur(0px); }
 
 	.lyric-line.active {
 		color: var(--color-onSurface);
 		opacity: 1;
-		transform: scale(1.05);
+		transform: scale(1.15);
 		font-weight: 800;
+		filter: blur(0px);
 	}
 
 	.lyric-line.secondary-line.active {
@@ -374,9 +415,9 @@
 	}
 
 	.lyric-line.past {
-		opacity: 0.15;
+		opacity: calc(0.3 / (1 + var(--distance) * 0.2));
 		transform: scale(0.92);
-		filter: blur(1px);
+		filter: blur(calc(var(--distance) * 2px));
 	}
 
 	.lyric-word {
