@@ -18,6 +18,7 @@
 </script>
 
 <script lang="ts">
+	import { spring } from 'svelte/motion'
 	import Button from '$lib/components/Button.svelte'
 	import Icon from '$lib/components/icon/Icon.svelte'
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
@@ -39,54 +40,56 @@
 
 	let result: SyncedLyricsResult | undefined = $state()
 	let loading = $state(false)
-	let scrollerElement: HTMLElement | undefined = $state()
+	let containerElement: HTMLElement | undefined = $state()
+	let contentElement: HTMLElement | undefined = $state()
 	let reloadCount = $state(0)
 	let isUserScrolling = $state(false)
 	let userScrollTimeout: ReturnType<typeof setTimeout>
 
+	// ─── Motion & Physics ───────────────────────────────────────────────────
+	const scrollOffset = spring(0, {
+		stiffness: 0.08,
+		damping: 0.4,
+	})
+
 	// ─── RAF-driven smooth time ───────────────────────────────────────────────
-	// Instead of relying on prop updates for word-progress, we maintain a
-	// high-frequency local time that's interpolated every animation frame.
-	let smoothTimeMs = $state(currentTimeMs)
-	let rafId: number
+	let smoothTimeMs = $state(0)
+	let lastPropTime = $state(0)
 	let lastRafTimestamp: number | undefined
-	let lastPropTime = currentTimeMs
 
 	$effect(() => {
-		// When the prop changes (e.g. seek, or slow interval update), re-anchor
-		// our RAF baseline so we interpolate from the correct position.
 		lastPropTime = currentTimeMs
-		lastRafTimestamp = undefined // force re-anchor on next frame
+		if (lastRafTimestamp === undefined) {
+			smoothTimeMs = currentTimeMs
+		}
+		lastRafTimestamp = undefined
 	})
 
 	$effect(() => {
-		// Run a RAF loop for the lifetime of this component.
 		let running = true
-
 		const tick = (now: number) => {
 			if (!running) return
-
 			if (lastRafTimestamp === undefined) {
-				// First frame after an anchor: snap to prop time
 				lastRafTimestamp = now
 				smoothTimeMs = lastPropTime
 			} else {
 				const elapsed = now - lastRafTimestamp
 				lastRafTimestamp = now
-				smoothTimeMs = lastPropTime + elapsed
-				lastPropTime = smoothTimeMs
+				// If playing, advance time. If paused, stay at prop time.
+				if (player.playing) {
+					smoothTimeMs += elapsed
+				} else {
+					smoothTimeMs = lastPropTime
+				}
 			}
-
-			rafId = requestAnimationFrame(tick)
+			requestAnimationFrame(tick)
 		}
-
-		rafId = requestAnimationFrame(tick)
+		const rafId = requestAnimationFrame(tick)
 		return () => {
 			running = false
 			cancelAnimationFrame(rafId)
 		}
 	})
-	// ─────────────────────────────────────────────────────────────────────────
 
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
@@ -112,7 +115,6 @@
 		}),
 	)
 
-	// Use smoothTimeMs for line index so active line tracking is also fluid
 	const activeLineIndex = $derived(getActiveLineIndex(processedLines, smoothTimeMs))
 
 	const getActiveWordIndex = (line: SyncedLyricsLine, timeMs: number): number => {
@@ -151,39 +153,58 @@
 		return () => controller.abort()
 	})
 
-	const scrollToActiveLine = (smooth = true) => {
-		if (!scrollerElement || activeLineIndex < 0) return
-		const activeEl = scrollerElement.querySelector<HTMLElement>(
+	const updateScrollPosition = (immediate = false) => {
+		if (!containerElement || !contentElement || activeLineIndex < 0) return
+		const activeEl = contentElement.querySelector<HTMLElement>(
 			`[data-line-index="${activeLineIndex}"]`,
 		)
 		if (!activeEl) return
-		const targetScroll =
-			activeEl.offsetTop - scrollerElement.offsetHeight / 2 + activeEl.offsetHeight / 2
-		scrollerElement.scrollTo({ top: targetScroll, behavior: smooth ? 'smooth' : 'auto' })
+
+		const containerHeight = containerElement.offsetHeight
+		const lineTop = activeEl.offsetTop
+		const lineHeight = activeEl.offsetHeight
+
+		// Target position to keep line centered
+		const target = containerHeight / 2 - lineTop - lineHeight / 2
+
+		scrollOffset.set(target, { hard: immediate })
 	}
 
-	// ─── Auto-scroll fix ──────────────────────────────────────────────────────
-	// Explicitly destructure activeLineIndex into a local const so Svelte's
-	// compiler sees it as a reactive read and re-runs this effect on change.
 	$effect(() => {
-		const idx = activeLineIndex // <-- reactive read tracked by Svelte
-		void idx                    // prevent tree-shaking
 		if (!isUserScrolling) {
-			scrollToActiveLine()
+			updateScrollPosition()
 		}
 	})
-	// ─────────────────────────────────────────────────────────────────────────
 
-	const retry = () => { reloadCount += 1 }
+	// Re-center on window resize
+	$effect(() => {
+		const handleResize = () => updateScrollPosition(true)
+		window.addEventListener('resize', handleResize)
+		return () => window.removeEventListener('resize', handleResize)
+	})
 
 	const handleUserInteraction = () => {
 		isUserScrolling = true
 		clearTimeout(userScrollTimeout)
 		userScrollTimeout = setTimeout(() => {
 			isUserScrolling = false
-			scrollToActiveLine()
 		}, 4000)
 	}
+
+	let lastTouchY = 0
+	const handleTouchStart = (e: TouchEvent) => {
+		lastTouchY = e.touches[0].clientY
+		handleUserInteraction()
+	}
+
+	const handleTouchMove = (e: TouchEvent) => {
+		const touchY = e.touches[0].clientY
+		const deltaY = lastTouchY - touchY
+		lastTouchY = touchY
+		scrollOffset.update(v => v - deltaY, { hard: true })
+	}
+
+	const retry = () => { reloadCount += 1 }
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
@@ -203,10 +224,18 @@
 	class={["lyrics-shell w-full", className]}
 	aria-live="polite"
 >
+	<!-- Background Atmosphere Layer -->
+	{#if player.artworkSrc}
+		<div class="lyrics-background">
+			<img src={player.artworkSrc} alt="" class="bg-image" />
+			<div class="bg-overlay"></div>
+		</div>
+	{/if}
+
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
 	{:else if loading}
-		<div class="lyrics-scroller overflow-hidden px-6 pt-12">
+		<div class="lyrics-scroller-mock px-6 pt-12" aria-hidden="true">
 			{#each Array(6) as _, i}
 				<div
 					class="skeleton mb-10 h-14 rounded-xl opacity-20"
@@ -216,19 +245,22 @@
 		</div>
 	{:else if result?.status === 'found'}
 		<div
-			class="lyrics-scroller"
-			bind:this={scrollerElement}
-			onwheel={handleUserInteraction}
-			ontouchmove={handleUserInteraction}
-			onmousedown={handleUserInteraction}
-			onkeydown={(e) => {
-				if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Space'].includes(e.code)) {
-					handleUserInteraction()
-				}
+			class="lyrics-container"
+			role="region"
+			aria-label="Lyrics"
+			bind:this={containerElement}
+			onwheel={(e) => {
+				handleUserInteraction()
+				scrollOffset.update(v => v - e.deltaY, { hard: true })
 			}}
+			ontouchstart={handleTouchStart}
+			ontouchmove={handleTouchMove}
 		>
-			<div class="lyrics-spacer"></div>
-			<div class="lyrics-content mx-auto w-full max-w-200">
+			<div
+				class="lyrics-content mx-auto w-full max-w-200"
+				bind:this={contentElement}
+				style="transform: translateY({$scrollOffset}px)"
+			>
 				{#each processedLines as line, lineIndex (lineIndex)}
 					{@const isActiveLine = lineIndex === activeLineIndex}
 					{@const activeWordIdx = isActiveLine ? getActiveWordIndex(line, smoothTimeMs) : -1}
@@ -245,6 +277,7 @@
 						onclick={() => {
 							player.seek(line.startTime / 1000)
 							isUserScrolling = false
+							updateScrollPosition()
 						}}
 					>
 						{#each line.words as word, wordIndex}
@@ -266,7 +299,6 @@
 					</button>
 				{/each}
 			</div>
-			<div class="lyrics-spacer"></div>
 		</div>
 	{:else if result?.status === 'instrumental'}
 		{@render emptyState('musicNote', 'Instrumental', 'This track is instrumental.')}
@@ -288,18 +320,70 @@
 		position: relative;
 		overflow: hidden;
 		background: transparent;
-		animation: fade-in 0.8s var(--ease-standard);
 	}
 
-	.lyrics-scroller {
+	.lyrics-background {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		pointer-events: none;
+		overflow: hidden;
+	}
+
+	.bg-image {
+		width: 110%;
+		height: 110%;
+		top: -5%;
+		left: -5%;
+		position: absolute;
+		object-fit: cover;
+		filter: blur(80px) saturate(1.8) brightness(0.4);
+		opacity: 0.6;
+		transition: opacity 1s ease;
+		animation: bg-drift 30s infinite alternate ease-in-out;
+	}
+
+	@keyframes bg-drift {
+		0% { transform: scale(1.1) translate(0, 0) rotate(0deg); }
+		50% { transform: scale(1.2) translate(2%, 2%) rotate(2deg); }
+		100% { transform: scale(1.1) translate(-2%, 1%) rotate(-1deg); }
+	}
+
+	.bg-overlay {
+		position: absolute;
+		inset: 0;
+		background:
+			linear-gradient(
+				to bottom,
+				rgba(0,0,0,0.4) 0%,
+				transparent 20%,
+				transparent 80%,
+				rgba(0,0,0,0.4) 100%
+			),
+			radial-gradient(
+				circle at center,
+				transparent 0%,
+				rgba(0,0,0,0.2) 100%
+			);
+		backdrop-filter: contrast(1.1) brightness(1.1);
+	}
+
+	.bg-overlay::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+		opacity: 0.03;
+		pointer-events: none;
+	}
+
+	.lyrics-container {
 		position: relative;
 		flex: 1;
-		overflow-y: auto;
-		padding: 0 1rem;
-		@media (min-width: 640px) { padding: 0 2rem; }
+		width: 100%;
+		overflow: hidden;
 		z-index: 5;
-		scrollbar-width: none;
-		-ms-overflow-style: none;
+		touch-action: pan-y;
 		mask-image: linear-gradient(
 			to bottom,
 			transparent 0%,
@@ -316,112 +400,100 @@
 		);
 	}
 
-	.lyrics-scroller::-webkit-scrollbar { display: none; }
-
-	.lyrics-spacer { height: 45vh; }
+	.lyrics-content {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		flex-direction: column;
+		padding: 0 1rem;
+		padding-bottom: calc(env(safe-area-inset-bottom) + 2rem);
+		@media (min-width: 640px) { padding: 0 2rem; }
+		will-change: transform;
+		transition: transform 0.1s linear; /* Minor smoothing for manual interaction */
+	}
 
 	.lyric-line {
 		display: block;
 		width: 100%;
-		text-align: center;
+		text-align: left; /* Changed to left for more Apple Music feel */
 		background: transparent;
 		border: none;
-		padding: 1rem 0;
-		margin: 0.5rem 0;
+		padding: 1.5rem 0;
+		margin: 0.25rem 0;
 		contain: content;
 		font-family: var(--font-sans);
-		font-size: 1.75rem;
-		@media (min-width: 640px) { font-size: 2rem; }
-		@media (min-width: 1024px) { font-size: 2.5rem; }
-		font-weight: 700;
-		line-height: 1.15;
-		letter-spacing: -0.03em;
+		font-size: 2.25rem;
+		@media (min-width: 640px) { font-size: 2.75rem; }
+		@media (min-width: 1024px) { font-size: 3.5rem; }
+		font-weight: 800;
+		line-height: 1.1;
+		letter-spacing: -0.04em;
 		white-space: pre-wrap;
 		user-select: none;
-		color: var(--color-onSurfaceVariant);
-		opacity: calc(0.5 / (1 + var(--distance) * 0.15));
-		transform: scale(calc(1 - var(--distance) * 0.025));
-		transform-origin: center;
+		color: #fff; /* White base for dark atmospheric bg */
+		opacity: calc(0.3 / (1 + var(--distance) * 0.4));
+		transform: scale(calc(1 - var(--distance) * 0.04)) translateX(calc(var(--distance) * 4px));
+		filter: blur(calc(var(--distance) * 1px));
+		transform-origin: left center;
 		cursor: pointer;
 		will-change: transform, opacity, filter;
 		transition:
-			opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1),
-			transform 0.6s cubic-bezier(0.25, 1, 0.5, 1),
-			filter 0.6s cubic-bezier(0.25, 1, 0.5, 1),
-			color 0.4s ease;
+			opacity 0.8s cubic-bezier(0.2, 0, 0, 1),
+			transform 0.8s cubic-bezier(0.2, 0, 0, 1),
+			filter 0.8s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.lyric-line.secondary-line {
-		font-size: 1.25rem;
-		@media (min-width: 640px) { font-size: 1.5rem; }
-		@media (min-width: 1024px) { font-size: 1.75rem; }
-		margin-top: -0.5rem;
-		font-weight: 600;
+		font-size: 1.5rem;
+		@media (min-width: 640px) { font-size: 1.75rem; }
+		@media (min-width: 1024px) { font-size: 2.25rem; }
+		font-weight: 700;
+		opacity: calc(0.2 / (1 + var(--distance) * 0.4));
 	}
-
-	.lyric-line:hover { opacity: 0.6; transform: scale(0.98); }
 
 	.lyric-line.active {
-		color: var(--color-onSurface);
 		opacity: 1;
-		transform: scale(1.05);
-		font-weight: 800;
-	}
-
-	.lyric-line.secondary-line.active {
-		opacity: 0.9;
-		transform: scale(1.02);
+		transform: scale(1.05) translateX(0);
+		filter: drop-shadow(0 0 20px rgba(255,255,255,0.2)) blur(0);
 	}
 
 	.lyric-line.past {
-		opacity: 0.15;
-		transform: scale(0.92);
-		filter: blur(1px);
+		opacity: calc(0.15 / (1 + var(--distance) * 0.2));
 	}
 
 	.lyric-word {
 		display: inline-block;
-		/* No transition here — progress is RAF-driven, CSS transition would
-		   add lag on top of already-smooth values and cause the choppiness */
+		position: relative;
 	}
 
-	.lyric-word.secondary-word {
-		font-size: 0.85em;
-		opacity: 0.8;
-	}
-
-	/* Karaoke fill — scoped to active line only */
+	/* Word Highlight System */
 	.lyric-line.active .lyric-word {
-		background-image:
-			linear-gradient(var(--color-onSurface), var(--color-onSurface)),
-			linear-gradient(
-				color-mix(in srgb, var(--color-onSurface) 25%, transparent),
-				color-mix(in srgb, var(--color-onSurface) 25%, transparent)
-			);
-		background-size:
-			var(--word-progress, 0%) 100%,
-			100% 100%;
-		background-repeat: no-repeat;
-		background-clip: text;
+		--highlight-color: #fff;
+		--inactive-color: rgba(255, 255, 255, 0.25);
+		background: linear-gradient(
+			to right,
+			var(--highlight-color) calc(var(--word-progress) - 5%),
+			var(--inactive-color) calc(var(--word-progress) + 5%)
+		);
 		-webkit-background-clip: text;
+		background-clip: text;
 		color: transparent;
-		-webkit-text-fill-color: transparent;
-		/* No transition — values arrive at 60fps from RAF, transition only adds jank */
+		transition: none;
+		/* Bloom/glow for highlighted words */
+		text-shadow: 0 0 15px rgba(255, 255, 255, calc(var(--word-progress) / 200));
 	}
 
 	.skeleton {
 		animation: ambient-shimmer 3s infinite ease-in-out;
-		background: linear-gradient(
-			90deg,
-			var(--color-surfaceContainerHighest) 0%,
-			var(--color-surfaceContainerHigh) 50%,
-			var(--color-surfaceContainerHighest) 100%
-		);
+		background: rgba(255, 255, 255, 0.1);
 		background-size: 200% 100%;
 	}
 
 	@keyframes ambient-shimmer {
-		0% { background-position: -200% 0; }
-		100% { background-position: 200% 0; }
+		0% { opacity: 0.1; }
+		50% { opacity: 0.2; }
+		100% { opacity: 0.1; }
 	}
 </style>
