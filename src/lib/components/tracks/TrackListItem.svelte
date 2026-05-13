@@ -12,6 +12,7 @@
 	import type { MenuItem } from '../menu/types.ts'
 
 	interface Props {
+		track?: TrackData
 		trackId: number
 		style?: string
 		ariaRowIndex: number
@@ -34,6 +35,7 @@
 	}
 
 	const {
+		track: trackProp,
 		trackId,
 		style,
 		active,
@@ -59,12 +61,52 @@
 	const ariaRowIndex = $derived(ariaRowIndexProp)
 
 	const query = createTrackQuery(() => trackId)
-	const { value: track, loading } = $derived(query)
+	const { value: dbTrack, loading } = $derived(query)
+	const track = $derived(trackProp || dbTrack)
 
 	const artworkSrc = createManagedArtwork(() => track?.image?.small)
 
 	const menu = useMenu()
 	const menuItemsWithItem = $derived(track && menuItems?.bind(null, track))
+
+	const onlineActions = $derived(
+		track?.source === 'jiosaavn'
+			? (async () => {
+					const { importOnlineTrack, downloadTrack } = await import('$lib/services/online-actions.ts')
+					return { importOnlineTrack, downloadTrack }
+				})()
+			: null,
+	)
+
+	const onlineMenuItems = $derived.by(() => {
+		if (!track || track.source !== 'jiosaavn') return []
+		return [
+			{
+				label: 'Add to Library',
+				action: async () => {
+					const { importOnlineTrack } = await (onlineActions as any)
+					await importOnlineTrack(track)
+					snackbar({ message: `Added ${track.name} to library` })
+				}
+			},
+			{
+				label: 'Download for Offline',
+				action: async () => {
+					const { downloadTrack } = await (onlineActions as any)
+					await downloadTrack(track)
+				}
+			},
+			{
+				label: 'Add to Playlist',
+				action: async () => {
+					const { importOnlineTrack } = await (onlineActions as any)
+					const id = await importOnlineTrack(track)
+					const dialogs = useDialogsStore()
+					dialogs.openDialog('addToPlaylist', [id])
+				}
+			}
+		]
+	})
 </script>
 
 <ListItem
@@ -104,7 +146,7 @@
 			return
 		}
 
-		menu.showFromEvent(e, menuItemsWithItem(), {
+		menu.showFromEvent(e, [...onlineMenuItems, ...(menuItemsWithItem ? menuItemsWithItem() : [])], {
 			anchor: false,
 			position: { top: e.y, left: e.x },
 		})

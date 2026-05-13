@@ -66,11 +66,19 @@ export class PlayerStore {
 	}
 
 	#activeTrackQuery: QueryResult<TrackData | undefined> = createTrackQuery(
-		() => this.#queue.itemsIds[this.#queue.activeTrackIndex] ?? -1,
+		() => this.#queue.activeTrackId ?? -1,
 		{ allowEmpty: true },
 	)
 
-	activeTrack: TrackData | undefined = $derived(this.#activeTrackQuery.value)
+	onlineTracks = $state<Record<number, TrackData>>({})
+
+	activeTrack: TrackData | undefined = $derived.by(() => {
+		const id = this.#queue.activeTrackId
+		if (id !== null && id < 0) {
+			return this.onlineTracks[id]
+		}
+		return this.#activeTrackQuery.value
+	})
 
 	#artwork = createManagedArtwork(() => this.activeTrack?.image?.full)
 	artworkSrc: string | undefined = $derived.by(this.#artwork)
@@ -121,7 +129,9 @@ export class PlayerStore {
 			this.currentTime = 0
 			this.duration = 0
 
-			void this.#audioLoader.load(track.directory, track.file).then((result) => {
+			void this.#audioLoader
+				.load(track.directory, track.file, track.url, track.offlineAudio)
+				.then((result) => {
 				if (result.status === 'failed') {
 					const name = truncate(track.name, 30)
 					const errorMap = {
@@ -313,7 +323,15 @@ export class PlayerStore {
 		trackIndex: number,
 		queue?: readonly number[],
 		options: PlayTrackOptions = {},
+		tracks?: TrackData[],
 	): void => {
+		if (tracks) {
+			tracks.forEach((t) => {
+				if (t.id < 0) {
+					this.onlineTracks[t.id] = t
+				}
+			})
+		}
 		const currentTrackId = this.#queue.activeTrackId
 		this.#queue.setTrack(trackIndex, queue, options)
 

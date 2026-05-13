@@ -90,11 +90,35 @@ export class AudioLoader {
 		this.#onSrc = onSrc
 	}
 
-	load = async (directoryId: number, file: FileEntity) => {
+	load = async (
+		directoryId: number | undefined,
+		file: FileEntity | undefined,
+		url?: string,
+		offlineAudio?: Blob,
+	) => {
 		this.#current += 1
 		const gen = this.#current
 		this.loading = true
 		this.#clearSrc()
+
+		if (offlineAudio) {
+			this.#currentSrc = URL.createObjectURL(offlineAudio)
+			this.#onSrc(this.#currentSrc)
+			this.loading = false
+			return { status: 'loaded' } as const
+		}
+
+		if (url) {
+			this.#currentSrc = url
+			this.#onSrc(this.#currentSrc)
+			this.loading = false
+			return { status: 'loaded' } as const
+		}
+
+		if (directoryId === undefined || file === undefined) {
+			this.loading = false
+			return { status: 'failed', reason: 'error' } as const
+		}
 
 		const { status: trackStatus, file: trackFile } = await getTrackFile(directoryId, file)
 		if (this.#current !== gen) {
