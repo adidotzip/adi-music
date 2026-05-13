@@ -1,11 +1,11 @@
-# Snae Player
+# Adi Music
 
 **[snaeplayer.com](https://snaeplayer.com)** - Local music player in the browser.
 
 Play audio files stored on your device. Includes playlists, queue, favorites, equalizer, playback speed, and artwork-based theming.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/minht11/local-music-pwa/main/src/routes/(marketing)/assets/hero.avif" height="400" alt="Snae Player showing the music library and playback controls" />
+  <img src="https://raw.githubusercontent.com/minht11/local-music-pwa/main/src/routes/(marketing)/assets/hero.avif" height="400" alt="Adi Music showing the music library and playback controls" />
 </p>
 
 ## Browser support

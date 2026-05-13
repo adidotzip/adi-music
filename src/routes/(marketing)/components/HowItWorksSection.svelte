@@ -35,7 +35,7 @@
 	class="mktg-content-width"
 	label="How it works"
 	title="Private by design, simple to start"
-	description="Pick a folder, approve access in the browser, and Snae Player reads only the music you choose."
+	description="Pick a folder, approve access in the browser, and Adi Music reads only the music you choose."
 >
 	<div
 		class="how-it-works-slider grid w-full snap-x snap-mandatory auto-cols-[minmax(18rem,22rem)] grid-flow-col gap-6 overflow-x-auto overscroll-x-contain pb-2 lg:auto-cols-auto lg:grid-flow-row lg:grid-cols-3 lg:overflow-visible lg:pb-0"

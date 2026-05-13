@@ -1,9 +1,0 @@
-$ vite dev
-✔ [paraglide-js] Compilation complete (locale-modules)
-11:51:07 AM [vite] (client) Forced re-optimization of dependencies
-
-  VITE v8.0.10  ready in 4819 ms
-
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: use --host to expose
-11:51:08 AM [vite] (client) [optimizer] scanning dependencies...

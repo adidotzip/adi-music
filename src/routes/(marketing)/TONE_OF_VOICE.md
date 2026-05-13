@@ -1,6 +1,6 @@
 # Marketing Tone Of Voice
 
-Use this guide for all copy on the landing page and other marketing-facing surfaces for Snae Player.
+Use this guide for all copy on the landing page and other marketing-facing surfaces for Adi Music.
 
 ## Voice In One Paragraph
 
@@ -238,7 +238,7 @@ Weaker:
 
 Before finalizing new marketing copy, check:
 
-- Is this wording specific to Snae Player?
+- Is this wording specific to Adi Music?
 - Does it match real product behavior and labels?
 - Is it truthful in implication, not just literally defensible?
 - Is it saying something new, or repeating another section?
