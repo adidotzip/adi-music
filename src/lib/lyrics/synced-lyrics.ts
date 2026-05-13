@@ -272,8 +272,8 @@ const getLyricsPlusLines = (data: unknown, durationSeconds: number): SyncedLyric
 		typeof data.syncedLyrics === 'string'
 			? data.syncedLyrics
 			: typeof data.lyrics === 'string'
-			? data.lyrics
-			: null
+				? data.lyrics
+				: null
 
 	if (lyricsText) {
 		return parseLrc(lyricsText, durationSeconds * 1000)

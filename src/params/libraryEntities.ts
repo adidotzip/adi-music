@@ -1,4 +1,4 @@
-const libraryEntitiesSlugs = ['tracks', 'albums', 'artists', 'playlists'] as const
+const libraryEntitiesSlugs = ['tracks', 'albums', 'artists', 'playlists', 'search'] as const
 type LibraryEntitiesSlug = (typeof libraryEntitiesSlugs)[number]
 
 const entities = new Set(libraryEntitiesSlugs)

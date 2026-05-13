@@ -80,7 +80,13 @@ export const load: LayoutLoad = async (event): Promise<LoadResult> => {
 		redirect(303, '/library/tracks')
 	}
 
-	const data = await loadData(slug)
+	let data: any = {
+		slug: 'search',
+		itemsIdsQuery: { value: [] },
+	}
+	if (slug !== 'search') {
+		data = await loadData(slug as LibraryStoreName)
+	}
 
 	const isWideLayout = () => (innerWidth.current ?? 0) > 1154
 	// We pass params here so that inside page we can benefit from $derived caching

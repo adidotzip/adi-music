@@ -32,15 +32,17 @@ const config = {
 				'img-src': [
 					'self',
 					'blob:',
+					'https://c.saavncdn.com',
 					env.PUBLIC_GOAT_COUNTER_URL ? `${env.PUBLIC_GOAT_COUNTER_URL}/count` : '',
 				],
-				'media-src': ['self', 'blob:'],
+				'media-src': ['self', 'blob:', 'https://aac.saavncdn.com'],
 				'font-src': ['self'],
 				'connect-src': [
 					'self',
 					env.PUBLIC_GOAT_COUNTER_URL ?? '',
 					'https://lrclib.net',
 					'https://lyricsplus.prjktla.workers.dev',
+					'https://jiosaavn-api.vercel.app',
 				],
 				'form-action': ['none'],
 				'manifest-src': ['self'],

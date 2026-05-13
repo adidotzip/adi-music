@@ -147,20 +147,25 @@ export const load: PageLoad = async (event): Promise<LoadResult> => {
 		id = FAVORITE_PLAYLIST_ID
 	} else {
 		const db = await getDatabase()
-		id = await db.getKeyFromIndex(slug, 'uuid', uuid)
+		id = (await db.getKeyFromIndex(slug as Exclude<DetailsSlug, 'playlists'>, 'uuid', uuid)) as
+			| number
+			| undefined
 	}
 
 	if (!id) {
 		error(404)
 	}
 
-	const itemQuery = await createDetailsPageQuery(slug, id)
+	const itemQuery = await createDetailsPageQuery(slug as Exclude<DetailsSlug, 'playlists'>, id)
 	const tracksQuery = await (slug === 'playlists'
 		? createPlaylistTracksPageQuery(id)
-		: createTracksPageQuery(slug, () => itemQuery.value.name))
+		: createTracksPageQuery(
+				slug as Exclude<DetailsSlug, 'playlists'>,
+				() => itemQuery.value.name,
+			))
 
 	return {
-		slug,
+		slug: slug as Exclude<DetailsSlug, 'playlists'>,
 		itemQuery,
 		tracksQuery,
 	}

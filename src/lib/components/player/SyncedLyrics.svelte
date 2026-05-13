@@ -154,7 +154,7 @@
 	})
 
 	const updateScrollPosition = (immediate = false) => {
-		if (!containerElement || !contentElement || activeLineIndex < 0) return
+		if (!(containerElement && contentElement ) || activeLineIndex < 0) return
 		const activeEl = contentElement.querySelector<HTMLElement>(
 			`[data-line-index="${activeLineIndex}"]`,
 		)

@@ -18,20 +18,24 @@
 	import { FAVORITE_PLAYLIST_ID } from '$lib/library/playlists-actions.ts'
 	import { getPlaylistMenuItems } from '$lib/menu-actions/playlists.ts'
 	import Search from './Search.svelte'
+	import SearchPage from './search/+page.svelte'
 
 	const { data, children } = $props()
 
-	initPageQueries(() => data)
+	let hasInitializedQueries = false
+	$effect(() => {
+		if (data.slug !== ('search' as any) && !hasInitializedQueries) { initPageQueries(() => data); hasInitializedQueries = true; }
+	})
 
 	const main = useMainStore()
 	const dialogs = useDialogsStore()
 
-	const itemsIds = $derived(data.itemsIdsQuery.value)
+	const itemsIds = $derived(data.slug === ('search' as any) ? [] : data.itemsIdsQuery.value)
 	const slug = $derived(data.slug)
 	const isHandHeldDevice = isMobile()
 
 	interface NavItem {
-		slug: typeof slug
+		slug: any
 		title: string
 		icon: IconType
 	}
@@ -56,6 +60,11 @@
 			slug: 'playlists',
 			title: m.playlists(),
 			icon: 'playlist',
+		},
+		{
+			slug: 'search' as any,
+			title: m.search(),
+			icon: 'magnify',
 		},
 	]
 
@@ -133,6 +142,9 @@
 	{#snippet list(mode)}
 		<div class={[isHandHeldDevice ? 'sm:pl-20' : 'pl-20', 'flex grow flex-col']}>
 			<div class={[mode === 'both' && 'w-100', 'flex grow flex-col px-4']}>
+				{#if slug === ('search' as any)}
+					<SearchPage />
+				{:else}
 				<Search name={data.pluralTitle()} sortOptions={data.sortOptions} store={data.store} />
 
 				{#if slug === 'playlists'}
@@ -194,6 +206,7 @@
 							/>
 						{/if}
 					</div>
+				{/if}
 				{/if}
 			</div>
 		</div>
