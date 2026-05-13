@@ -14,16 +14,24 @@ class Artwork {
 
 	refs = new Set<number>()
 
-	constructor(image: Blob) {
-		this.image = image
-		this.url = URL.createObjectURL(image)
+	constructor(image: Blob | string) {
+		if (typeof image === 'string') {
+			this.image = new Blob() // dummy
+			this.url = image
+		} else {
+			this.image = image
+			this.url = URL.createObjectURL(image)
+		}
 	}
 }
 
-const cache = new WeakMap<Blob, Artwork>()
-const cleanupQueue = new Set<Blob>()
+const cache = new Map<Blob | string, Artwork>()
+const cleanupQueue = new Set<Blob | string>()
 let isCleanupScheduled = false
 const scheduleCleanup = (artwork: Artwork) => {
+	if (typeof artwork.url === 'string' && !artwork.url.startsWith('blob:')) {
+		return
+	}
 	cleanupQueue.add(artwork.image)
 
 	if (isCleanupScheduled) {
@@ -48,7 +56,7 @@ const scheduleCleanup = (artwork: Artwork) => {
 	}, thirtySeconds)
 }
 
-export const createManagedArtwork = (getImage: () => Blob | undefined | null) => {
+export const createManagedArtwork = (getImage: () => Blob | string | undefined | null) => {
 	const refId = Artwork.createRefId()
 
 	const artwork = $derived.by(() => {

@@ -1,4 +1,4 @@
-import { jioSaavnService, type JioSaavnSong } from '$lib/services/jiosaavn'
+import type { JioSaavnSong } from '$lib/services/jiosaavn'
 import type { TrackData } from '$lib/library/get/value'
 
 function hashCode(str: string) {
@@ -11,24 +11,30 @@ function hashCode(str: string) {
 	return hash
 }
 
+function decodeHtml(html: string) {
+	const txt = document.createElement('textarea')
+	txt.innerHTML = html
+	return txt.value
+}
+
 export function mapJioSaavnSongToTrack(song: JioSaavnSong): TrackData {
-	const image = song.image[song.image.length - 1]?.link || ''
+	const image = song.images['500x500'] || song.image
 	const stableId = -Math.abs(hashCode(`jiosaavn-${song.id}`))
 	return {
 		id: stableId,
 		uuid: `jiosaavn-${song.id}`,
-		name: song.name,
-		album: song.album || 'Unknown Album',
-		artists: song.primaryArtists.split(',').map((a) => a.trim()),
-		year: song.year || '',
-		duration: song.duration || 0,
+		name: decodeHtml(song.title),
+		album: decodeHtml(song.album),
+		artists: song.more_info.singers.split(',').map((a) => decodeHtml(a.trim())),
+		year: '',
+		duration: 0,
 		genre: [],
 		trackNo: 0,
 		trackOf: 0,
 		discNo: 0,
 		discOf: 0,
-		language: song.language,
-		url: song.downloadUrl[song.downloadUrl.length - 1]?.link,
+		language: song.more_info.language,
+		url: song.more_info.vlink,
 		source: 'jiosaavn',
 		image: {
 			optimized: true,

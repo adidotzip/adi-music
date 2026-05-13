@@ -60,9 +60,10 @@
 	// ariaRowIndexProp rerenders a lot even when it doesn't change
 	const ariaRowIndex = $derived(ariaRowIndexProp)
 
-	const query = createTrackQuery(() => trackId)
-	const { value: dbTrack, loading } = $derived(query)
+	const query = createTrackQuery(() => (trackProp ? -1 : trackId))
+	const { value: dbTrack, loading: dbLoading } = $derived(query)
 	const track = $derived(trackProp || dbTrack)
+	const loading = $derived(trackProp ? false : dbLoading)
 
 	const artworkSrc = createManagedArtwork(() => track?.image?.small)
 
@@ -183,10 +184,6 @@
 			<div class="mb-2 h-2 rounded-xs bg-onSurface/10"></div>
 			<div class="h-1 w-1/8 rounded-xs bg-onSurface/10"></div>
 		</div>
-	{:else if query.error}
-		<div class="text-error">
-			Error loading track with id {trackId}
-		</div>
 	{:else if track}
 		<div
 			role="gridcell"
@@ -281,6 +278,10 @@
 					</IconButton>
 				</div>
 			</div>
+		</div>
+	{:else if query.error}
+		<div class="text-error">
+			Error loading track with id {trackId}
 		</div>
 	{/if}
 </ListItem>

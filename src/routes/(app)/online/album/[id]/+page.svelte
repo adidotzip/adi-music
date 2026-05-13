@@ -6,7 +6,6 @@
 	import TrackListItem from '$lib/components/tracks/TrackListItem.svelte'
 	import Artwork from '$lib/components/Artwork.svelte'
 	import { usePlayer } from '$lib/stores/player/use-store'
-	import { formatArtists } from '$lib/helpers/utils/text'
 
 	const player = usePlayer()
 	let id = $derived(page.params.id)
@@ -20,7 +19,10 @@
 			loading = true
 			jioSaavnService.getAlbumDetails(id).then(data => {
 				album = data
-				tracks = data.songs?.map(mapJioSaavnSongToTrack) || []
+				tracks = data.results?.map(mapJioSaavnSongToTrack) || []
+				loading = false
+			}).catch(err => {
+				console.error("Album error:", err)
 				loading = false
 			})
 		}
@@ -34,12 +36,12 @@
 		</div>
 	{:else if album}
 		<div class="mb-8 flex flex-col gap-6 md:flex-row md:items-end">
-			<Artwork src={album.image[album.image.length-1].link} class="size-48 rounded-2xl shadow-xl md:size-64" />
+			<Artwork src={album.image} class="size-48 rounded-2xl shadow-xl md:size-64" />
 			<div class="flex flex-col">
 				<div class="mb-1 text-body-md font-medium text-primary">Album</div>
-				<h1 class="mb-2 text-headline-lg font-bold">{album.name}</h1>
+				<h1 class="mb-2 text-headline-lg font-bold">{album.title}</h1>
 				<div class="text-title-md text-onSurfaceVariant">
-					{album.primaryArtists} • {album.year} • {album.songCount} songs
+					{tracks.length} songs
 				</div>
 			</div>
 		</div>

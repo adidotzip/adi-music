@@ -19,7 +19,10 @@
 			loading = true
 			jioSaavnService.getPlaylistDetails(id).then(data => {
 				playlist = data
-				tracks = data.songs?.map(mapJioSaavnSongToTrack) || []
+				tracks = data.results?.map(mapJioSaavnSongToTrack) || []
+				loading = false
+			}).catch(err => {
+				console.error("Playlist error:", err)
 				loading = false
 			})
 		}
@@ -33,12 +36,12 @@
 		</div>
 	{:else if playlist}
 		<div class="mb-8 flex flex-col gap-6 md:flex-row md:items-end">
-			<Artwork src={playlist.image[playlist.image.length-1].link} class="size-48 rounded-2xl shadow-xl md:size-64" />
+			<Artwork src={playlist.image} class="size-48 rounded-2xl shadow-xl md:size-64" />
 			<div class="flex flex-col">
 				<div class="mb-1 text-body-md font-medium text-primary">Playlist</div>
-				<h1 class="mb-2 text-headline-lg font-bold">{playlist.name}</h1>
+				<h1 class="mb-2 text-headline-lg font-bold">{playlist.title}</h1>
 				<div class="text-title-md text-onSurfaceVariant">
-					By {playlist.firstname} • {playlist.songCount} songs • {playlist.followerCount} followers
+					{tracks.length} songs
 				</div>
 			</div>
 		</div>
