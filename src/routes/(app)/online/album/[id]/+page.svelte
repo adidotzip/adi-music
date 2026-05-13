@@ -36,7 +36,7 @@
 		</div>
 	{:else if album}
 		<div class="mb-8 flex flex-col gap-6 md:flex-row md:items-end">
-			<Artwork src={album.image} class="size-48 rounded-2xl shadow-xl md:size-64" />
+			<Artwork src={Array.isArray(album.image) ? album.image[album.image.length - 1]?.link : album.image} class="size-48 rounded-2xl shadow-xl md:size-64" />
 			<div class="flex flex-col">
 				<div class="mb-1 text-body-md font-medium text-primary">Album</div>
 				<h1 class="mb-2 text-headline-lg font-bold">{album.title}</h1>

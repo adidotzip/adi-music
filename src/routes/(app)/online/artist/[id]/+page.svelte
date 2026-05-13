@@ -27,6 +27,22 @@
 			})
 		}
 	})
+
+	const artistImageUrl = $derived.by(() => {
+		if (!artist?.image) return null
+		if (Array.isArray(artist.image)) {
+			return artist.image[artist.image.length - 1]?.link
+		}
+		return artist.image
+	})
+
+	const getAlbumImageUrl = (album: any) => {
+		if (!album?.image) return null
+		if (Array.isArray(album.image)) {
+			return album.image[album.image.length - 1]?.link
+		}
+		return album.image
+	}
 </script>
 
 <div class="mx-auto flex w-full max-w-(--app-max-content-width) flex-col px-4 pt-4">
@@ -36,12 +52,13 @@
 		</div>
 	{:else if artist}
 		<div class="mb-8 flex flex-col gap-6 md:flex-row md:items-end">
-			<Artwork src={artist.image[artist.image.length-1].link} class="size-48 rounded-full shadow-xl md:size-64" />
+			<Artwork src={artistImageUrl} class="size-48 rounded-full shadow-xl md:size-64" />
 			<div class="flex flex-col">
 				<div class="mb-1 text-body-md font-medium text-primary">Artist</div>
 				<h1 class="mb-2 text-headline-lg font-bold">{artist.name}</h1>
 				<div class="text-title-md text-onSurfaceVariant">
-					{artist.fanCount} Fans • {artist.dominantLanguage}
+					{#if artist.fanCount}{artist.fanCount} Fans • {/if}
+					{artist.dominantLanguage || ''}
 				</div>
 			</div>
 		</div>
@@ -78,7 +95,7 @@
 							class="flex flex-col text-left transition-transform hover:scale-105"
 							onclick={() => goto(`/online/album/${album.id}`)}
 						>
-							<Artwork src={album.image[album.image.length-1].link} class="mb-2 aspect-square w-full rounded-xl shadow-md" />
+							<Artwork src={getAlbumImageUrl(album)} class="mb-2 aspect-square w-full rounded-xl shadow-md" />
 							<div class="truncate font-medium">{album.name}</div>
 							<div class="truncate text-body-sm text-onSurfaceVariant">{album.year}</div>
 						</button>

@@ -1,4 +1,4 @@
-export const JIOSAAVN_API_URL = 'https://jiosaavn-api.vercel.app/api'
+export const JIOSAAVN_API_URL = 'https://jiosaavn-api.vercel.app'
 
 export interface JioSaavnSong {
 	id: string
@@ -35,14 +35,12 @@ export interface JioSaavnAlbum {
 
 export interface JioSaavnArtist {
 	id: string
-	title: string
-	image: string
-	images: {
-		'50x50': string
-		'150x150': string
-		'500x500': string
-	}
-	description: string
+	name: string
+	image: { quality: string; link: string }[]
+	fanCount?: string
+	dominantLanguage?: string
+	topSongs?: JioSaavnSong[]
+	topAlbums?: JioSaavnAlbum[]
 }
 
 export interface JioSaavnPlaylist {
@@ -68,7 +66,9 @@ export const jioSaavnService = {
 		return data.results
 	},
 
-	async getAlbumDetails(id: string): Promise<{ results: JioSaavnSong[]; title: string; image: string }> {
+	async getAlbumDetails(
+		id: string,
+	): Promise<{ results: JioSaavnSong[]; title: string; image: string }> {
 		const res = await fetch(`${JIOSAAVN_API_URL}/album?id=${id}`)
 		const data = await res.json()
 		return data
@@ -84,6 +84,12 @@ export const jioSaavnService = {
 
 	async getSongDetails(id: string): Promise<JioSaavnSong> {
 		const res = await fetch(`${JIOSAAVN_API_URL}/song?id=${id}`)
+		const data = await res.json()
+		return data
+	},
+
+	async getArtistDetails(id: string): Promise<JioSaavnArtist> {
+		const res = await fetch(`${JIOSAAVN_API_URL}/artist?id=${id}`)
 		const data = await res.json()
 		return data
 	},

@@ -8,18 +8,17 @@ class Artwork {
 		return index
 	}
 
-	image: Blob
+	key: Blob | string
 
 	url: string
 
 	refs = new Set<number>()
 
 	constructor(image: Blob | string) {
+		this.key = image
 		if (typeof image === 'string') {
-			this.image = new Blob() // dummy
 			this.url = image
 		} else {
-			this.image = image
 			this.url = URL.createObjectURL(image)
 		}
 	}
@@ -29,10 +28,7 @@ const cache = new Map<Blob | string, Artwork>()
 const cleanupQueue = new Set<Blob | string>()
 let isCleanupScheduled = false
 const scheduleCleanup = (artwork: Artwork) => {
-	if (typeof artwork.url === 'string' && !artwork.url.startsWith('blob:')) {
-		return
-	}
-	cleanupQueue.add(artwork.image)
+	cleanupQueue.add(artwork.key)
 
 	if (isCleanupScheduled) {
 		return
@@ -41,14 +37,16 @@ const scheduleCleanup = (artwork: Artwork) => {
 	isCleanupScheduled = true
 	const thirtySeconds = 30 * 1000
 	setTimeout(() => {
-		for (const blob of cleanupQueue) {
-			const cached = cache.get(blob)
+		for (const key of cleanupQueue) {
+			const cached = cache.get(key)
 			if (!cached) {
 				continue
 			}
 			if (cached.refs.size === 0) {
-				cache.delete(blob)
-				URL.revokeObjectURL(cached.url)
+				cache.delete(key)
+				if (typeof key !== 'string') {
+					URL.revokeObjectURL(cached.url)
+				}
 			}
 		}
 		cleanupQueue.clear()

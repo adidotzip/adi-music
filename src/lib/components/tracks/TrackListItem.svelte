@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { m } from '$paraglide/messages'
+	import { snackbar } from '$lib/components/snackbar/snackbar'
+	import { useDialogsStore } from '$lib/stores/dialogs/use-store'
+	import { useMenu } from '$lib/components/menu/MenuRenderer.svelte'
 	import { createManagedArtwork } from '$lib/helpers/create-managed-artwork.svelte'
 	import { formatDuration } from '$lib/helpers/utils/format-duration.ts'
 	import { formatArtists, formatNameOrUnknown, getItemLanguage } from '$lib/helpers/utils/text.ts'

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$paraglide/messages'
 	import { page } from '$app/state'
 	import Button from './Button.svelte'
 	import Icon, { type IconType } from './icon/Icon.svelte'
