@@ -23,6 +23,7 @@
 		setupDirectoriesPermissionPrompt,
 	} from './layout/setup-directories-permission-prompt.svelte.ts'
 	import { setupTheme } from './layout/setup-theme.svelte.ts'
+	import AppNavigation from '$lib/components/AppNavigation.svelte'
 
 	// These context are in different files from their implementation
 	// to allow better trees shaking and inlining
@@ -119,10 +120,18 @@
 	</div>
 {/if}
 
-{@render children()}
+<div class="flex min-h-screen w-full flex-col">
+	<div class="hidden sm:block">
+		<AppNavigation mode="sidebar" />
+	</div>
+
+	<main class="flex grow flex-col sm:pl-20">
+		{@render children()}
+	</main>
+</div>
 
 <div
-	class="page-overlay-container pointer-events-none fixed inset-x-0 bottom-0 grid gap-y-2 overflow-hidden"
+	class="page-overlay-container pointer-events-none fixed inset-x-0 bottom-0 z-20 grid gap-y-2 overflow-hidden"
 >
 	<SnackbarRenderer />
 
@@ -137,7 +146,11 @@
 	</div>
 
 	<div bind:clientHeight={bottomBarHeight} class="col-[1/6]">
-		{@render overlaySnippets.bottomBar?.()}
+		{#if overlaySnippets.bottomBar}
+			{@render overlaySnippets.bottomBar()}
+		{:else}
+			<AppNavigation mode="bottom-bar" />
+		{/if}
 	</div>
 </div>
 

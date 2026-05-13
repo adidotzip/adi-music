@@ -96,42 +96,32 @@
 {/snippet}
 
 {#snippet layoutBottom()}
-	{#if isHandHeldDevice}
-		<div
-			class="pointer-events-auto grid h-16 w-full grid-cols-[repeat(auto-fit,minmax(0,1fr))] bg-surfaceContainer sm:hidden active-view-regular:view-name-[bottom-bar]"
-		>
-			{@render navItemsSnippet('h-full')}
-		</div>
-	{/if}
+	<!-- Navigation is now handled by global +layout.svelte -->
 {/snippet}
 
-{#if layoutMode !== 'details'}
+{#if (slug === 'albums' || slug === 'artists') && isWideLayout}
 	<div
 		class={[
-			'desktop-sidebar fixed z-1 mt-20 h-max w-max flex-col items-center gap-2 [@media(max-height:500px)]:mt-2',
+			'desktop-sidebar fixed z-1 mt-105 flex h-max w-max flex-col items-center gap-2',
 			isHandHeldDevice ? 'hidden sm:flex' : 'flex',
 		]}
 	>
-		{@render navItemsSnippet('h-14 w-20')}
-
-		{#if (slug === 'albums' || slug === 'artists') && isWideLayout}
-			<IconButton
-				icon="sidePanel"
-				tooltip={main.librarySplitLayoutEnabled
-					? m.librarySplitViewDisable()
-					: m.librarySplitViewEnable()}
-				class={['mt-4', main.librarySplitLayoutEnabled && 'rotate-180']}
-				onclick={() => {
-					main.librarySplitLayoutEnabled = !main.librarySplitLayoutEnabled
-				}}
-			/>
-		{/if}
+		<IconButton
+			icon="sidePanel"
+			tooltip={main.librarySplitLayoutEnabled
+				? m.librarySplitViewDisable()
+				: m.librarySplitViewEnable()}
+			class={['mt-4', main.librarySplitLayoutEnabled && 'rotate-180']}
+			onclick={() => {
+				main.librarySplitLayoutEnabled = !main.librarySplitLayoutEnabled
+			}}
+		/>
 	</div>
 {/if}
 
 <ListDetailsLayout mode={layoutMode} class="mx-auto w-full max-w-(--app-max-content-width) grow">
 	{#snippet list(mode)}
-		<div class={[isHandHeldDevice ? 'sm:pl-20' : 'pl-20', 'flex grow flex-col']}>
+		<div class="flex grow flex-col">
 			<div class={[mode === 'both' && 'w-100', 'flex grow flex-col px-4']}>
 				<Search name={data.pluralTitle()} sortOptions={data.sortOptions} store={data.store} />
 
