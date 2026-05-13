@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Snae Player** is a privacy-first local music PWA that runs entirely in the browser. Built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4**, it emphasizes performance, type safety, and maintainability.
+**Adi Music** is a privacy-first local music PWA that runs entirely in the browser. Built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4**, it emphasizes performance, type safety, and maintainability.
 
 ### Core Features
 

@@ -17,7 +17,7 @@
 		{
 			title: 'Add a directory',
 			description:
-				'In Settings, click Add directory and choose the music folder you want Snae Player to scan.',
+				'In Settings, click Add directory and choose the music folder you want Adi Music to scan.',
 		},
 		{
 			title: 'Browse your library',

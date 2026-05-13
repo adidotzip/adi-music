@@ -46,7 +46,7 @@
 				src={heroImg.src}
 				width={heroImg.width}
 				height={heroImg.height}
-				alt="Snae Player showing the music library and playback controls"
+				alt="Adi Music showing the music library and playback controls"
 				loading="eager"
 				fetchpriority="high"
 			/>

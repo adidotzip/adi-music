@@ -41,7 +41,7 @@
 						price: '0',
 						priceCurrency: 'USD',
 					},
-					sameAs: ['https://github.com/minht11/local-music-pwa'],
+					sameAs: ['https://github.com/adidotzip/adi-music'],
 					featureList: [
 						'Play music stored on your device',
 						'Works in modern browsers on Android and iOS, plus Chromebooks, Windows PCs, and Macs',
@@ -72,7 +72,7 @@
 	<meta property="og:description" content={seoDescription} />
 	<meta property="og:url" content={page.url.href} />
 	<meta property="og:image" content={`${page.url.origin}${heroImg.src}`} />
-	<meta property="og:image:alt" content="Snae Player showing the library and player interface" />
+	<meta property="og:image:alt" content="Adi Music showing the library and player interface" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={seoTitle} />
 	<meta name="twitter:description" content={seoDescription} />
@@ -93,7 +93,7 @@
 
 	<IconButton
 		as="a"
-		href="https://github.com/minht11/local-music-pwa"
+		href="https://github.com/adidotzip/adi-music"
 		target="_blank"
 		kind="flat"
 		tooltip="View source code on GitHub"
@@ -139,7 +139,7 @@
 
 		<div class="flex items-center gap-6 text-body-md">
 			<a
-				href="https://github.com/minht11/local-music-pwa"
+				href="https://github.com/adidotzip/adi-music"
 				rel="noopener noreferrer"
 				target="_blank"
 				class="flex items-center gap-1.5 text-onSurfaceVariant transition-colors duration-200 hover:text-onSurface"
@@ -149,7 +149,7 @@
 			</a>
 
 			<a
-				href="https://github.com/minht11/local-music-pwa#privacy"
+				href="https://github.com/adidotzip/adi-music#privacy"
 				rel="noopener noreferrer"
 				target="_blank"
 				class="text-onSurfaceVariant transition-colors duration-200 hover:text-onSurface"

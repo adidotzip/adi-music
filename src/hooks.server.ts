@@ -9,7 +9,7 @@ const getThemeColorMeta = (color: string | undefined, theme: 'dark' | 'light') =
 
 const replaceThemeColorMeta = (html: string) =>
 	html.replace(
-		'%snae.theme-color-meta%',
+		'%adi.theme-color-meta%',
 		`
 		${getThemeColorMeta(THEME_PALLETTE_LIGHT.surface, 'light')}
 		${getThemeColorMeta(THEME_PALLETTE_DARK.surface, 'dark')}
@@ -27,7 +27,7 @@ const replaceSvgIconPaths = (html: string) => {
 	// Instead of keeping the icons paths in the client js bundle, we can inline them in the html
 	// making loading tiny bit faster
 	return html.replace(
-		'%snae.svg-icons-paths%',
+		'%adi.svg-icons-paths%',
 		`
 		<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="display: none;">
 			<defs>
@@ -38,9 +38,9 @@ const replaceSvgIconPaths = (html: string) => {
 }
 
 const replaceGoatCounterUrl = (html: string) =>
-	html.replaceAll('%snae.goat-counter-url%', PUBLIC_GOAT_COUNTER_URL)
+	html.replaceAll('%adi.goat-counter-url%', PUBLIC_GOAT_COUNTER_URL)
 
-const replaceDescription = (html: string) => html.replace('%snae.description%', APP_DESCRIPTION_EN)
+const replaceDescription = (html: string) => html.replace('%adi.description%', APP_DESCRIPTION_EN)
 
 const transformPageChunk = ({ html }: { html: string }) => {
 	html = replaceSvgIconPaths(html)
