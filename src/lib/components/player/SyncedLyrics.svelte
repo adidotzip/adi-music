@@ -51,7 +51,6 @@
 	let userScrollTimeout: ReturnType<typeof setTimeout>
 
 	// ─── Motion & Physics ───────────────────────────────────────────────────
-	// Slightly tighter damping for that snappy Apple Music feel
 	const scrollOffset = spring(0, {
 		stiffness: 0.08,
 		damping: 0.6, 
@@ -131,17 +130,25 @@
 					inSecondary = false
 					isWordSecondary = true
 				}
-				// Clean up the brackets for display if desired, or leave them
 				return { ...word, isSecondary: isWordSecondary }
 			})
 			
+			// Detect if the whole line is secondary before stripping brackets
 			const lineText = words.map((w) => w.string).join('').trim()
 			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
+
+			// Strip out the parentheses for the final display
+			const cleanedWords = words.map((word) => {
+				return {
+					...word,
+					string: word.string.replace(/[()]/g, '') // Removes '(' and ')'
+				}
+			})
 			
 			items.push({ 
 				type: 'line', 
 				...line, 
-				words, 
+				words: cleanedWords, 
 				isSecondaryLine 
 			})
 		}
@@ -197,7 +204,6 @@
 		const lineTop = activeEl.offsetTop
 		const lineHeight = activeEl.offsetHeight
 
-		// Target position to keep line vertically centered
 		const target = (containerHeight / 2) - lineTop - (lineHeight / 2)
 
 		scrollOffset.set(target, { hard: immediate })
@@ -244,20 +250,13 @@
 		</div>
 {/snippet}
 
-<section class={["lyrics-shell w-full", className]} aria-live="polite">
-	{#if player.artworkSrc}
-		<div class="lyrics-background">
-			<img src={player.artworkSrc} alt="" class="bg-image" />
-			<div class="bg-overlay"></div>
-		</div>
-	{/if}
-
+<section class={["lyrics-shell w-full h-full relative overflow-hidden bg-black", className]} aria-live="polite">
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
 	{:else if loading}
 		{:else if result?.status === 'found'}
 		<div
-			class="lyrics-container"
+			class="lyrics-container absolute inset-0 w-full h-full"
 			role="region"
 			aria-label="Lyrics"
 			bind:this={containerElement}
@@ -269,7 +268,7 @@
 			ontouchmove={handleTouchMove}
 		>
 			<div
-				class="lyrics-content mx-auto w-full max-w-200"
+				class="lyrics-content mx-auto w-full max-w-2xl"
 				bind:this={contentElement}
 				style="transform: translateY({$scrollOffset}px)"
 			>
@@ -309,20 +308,22 @@
 							}}
 						>
 							{#each item.words as word, wordIndex}
-								{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
-								{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
-								{@const nextTime = item.words[wordIndex + 1]?.time ?? item.endTime}
-								{@const duration = Math.max(nextTime - word.time, 1)}
-								{@const wordProgress = isCurrentWord
-									? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
-									: isPastWord ? 100 : 0}
+								{#if word.string.trim().length > 0}
+									{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
+									{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
+									{@const nextTime = item.words[wordIndex + 1]?.time ?? item.endTime}
+									{@const duration = Math.max(nextTime - word.time, 1)}
+									{@const wordProgress = isCurrentWord
+										? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
+										: isPastWord ? 100 : 0}
 
-								<span
-									class="lyric-word"
-									class:past-word={isPastWord}
-									class:secondary-word={word.isSecondary}
-									style="--word-progress: {wordProgress}%"
-								>{word.string}</span>
+									<span
+										class="lyric-word"
+										class:past-word={isPastWord}
+										class:secondary-word={word.isSecondary}
+										style="--word-progress: {wordProgress}%"
+									>{word.string}</span>
+								{/if}
 							{/each}
 						</button>
 					{/if}
@@ -335,8 +336,6 @@
 <style lang="postcss">
 	@reference "../../../app.css";
 
-	/* ... Maintain your shell and bg-image styles ... */
-	
 	.lyrics-content {
 		position: absolute;
 		top: 0;
@@ -344,12 +343,13 @@
 		right: 0;
 		display: flex;
 		flex-direction: column;
-		padding: 0 1.5rem;
+		/* Mobile-optimized padding */
+		padding: 0 1.25rem;
+		@media (min-width: 640px) { padding: 0 2rem; }
 		padding-bottom: calc(env(safe-area-inset-bottom) + 50vh);
 		will-change: transform;
 	}
 
-	/* Unified item spacing and transition basis */
 	.lyric-item {
 		display: block;
 		width: 100%;
@@ -357,11 +357,10 @@
 		background: transparent;
 		border: none;
 		margin: 0;
-		padding: 1.25rem 0; /* Tighter padding, visual gap handled by scale */
+		padding: 1.25rem 0; 
 		transform-origin: left center;
 		will-change: transform, opacity, filter;
 		
-		/* The Apple Music math: farther away = smaller, blurrier, more transparent */
 		opacity: calc(0.25 / (1 + var(--distance) * 0.5));
 		transform: scale(calc(1 - var(--distance) * 0.05));
 		filter: blur(calc(var(--distance) * 2.5px));
@@ -372,10 +371,10 @@
 			filter 0.7s cubic-bezier(0.25, 1, 0.5, 1);
 	}
 
-	/* Text specifics */
 	.lyric-line {
 		font-family: var(--font-sans);
-		font-size: 2.25rem;
+		/* Mobile-first font sizing */
+		font-size: 2.15rem;
 		@media (min-width: 640px) { font-size: 2.75rem; }
 		@media (min-width: 1024px) { font-size: 3.5rem; }
 		font-weight: 800;
@@ -393,23 +392,22 @@
 	}
 
 	.lyric-item.past {
-		/* Past lines fade out faster than upcoming lines */
 		opacity: calc(0.15 / (1 + var(--distance) * 0.75));
 	}
 
-
 	.lyric-line.secondary-line {
-		font-size: 1.75rem;
+		/* Scale down for secondary lines on mobile */
+		font-size: 1.5rem;
+		@media (min-width: 640px) { font-size: 1.75rem; }
 		@media (min-width: 1024px) { font-size: 2.5rem; }
 		font-weight: 700;
 		color: rgba(255, 255, 255, 0.7);
 	}
 
 	.lyric-word.secondary-word {
-		font-size: 0.85em; /* Scale down words inside parens inline */
+		font-size: 0.85em; 
 		color: rgba(255, 255, 255, 0.75);
 	}
-
 
 	.lyric-word {
 		display: inline-block;
@@ -429,7 +427,6 @@
 		transition: none;
 	}
 
-	/* Ensure active secondary words dim slightly less intensely than main words */
 	.lyric-line.active .lyric-word.secondary-word {
 		background: linear-gradient(
 			to right,
@@ -439,7 +436,6 @@
 		-webkit-background-clip: text;
 		background-clip: text;
 	}
-
 
 	.lyric-break {
 		display: flex;
@@ -460,7 +456,6 @@
 		transition: background-color 0.3s ease;
 	}
 
-	/* When the break is active, animate the dots pulsing left to right */
 	.lyric-break.active .dot {
 		background-color: rgba(255, 255, 255, 0.9);
 		animation: pulse-dot 1.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
