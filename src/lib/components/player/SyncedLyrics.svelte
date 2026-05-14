@@ -1,17 +1,18 @@
 <script lang="ts" module>
 	import type { SyncedLyricsLine } from '$lib/lyrics/synced-lyrics.ts'
 
-	type LyricItem = 
+	export type LyricItem =
 		| (SyncedLyricsLine & { type: 'line'; isSecondaryLine: boolean; words: any[] })
 		| { type: 'break'; startTime: number; endTime: number; id: string };
 
-	const getActiveLineIndex = (
+	export const getActiveLineIndex = (
 		items: readonly LyricItem[],
 		currentTimeMs: number,
 	): number => {
 		let index = -1
 		for (let i = 0; i < items.length; i += 1) {
-			if (currentTimeMs >= items[i].startTime) {
+			const item = items[i]
+			if (item && currentTimeMs >= item.startTime) {
 				index = i
 			} else {
 				break
@@ -23,9 +24,7 @@
 
 <script lang="ts">
 	import { spring } from 'svelte/motion'
-	import Button from '$lib/components/Button.svelte'
 	import Icon from '$lib/components/icon/Icon.svelte'
-	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import type { TrackData } from '$lib/library/get/value.ts'
 	import {
 		fetchSyncedLyrics,
@@ -103,11 +102,11 @@
 		
 		for (let i = 0; i < lines.length; i += 1) {
 			const line = lines[i]
+            if (!line) continue
 
 			if (i > 0) {
 				const prevLine = lines[i - 1]
-				const gap = line.startTime - prevLine.endTime
-				if (gap > 3500) {
+				if (prevLine && line.startTime - prevLine.endTime > 3500) {
 					items.push({
 						type: 'break',
 						startTime: prevLine.endTime,
@@ -229,23 +228,27 @@
 
 	let lastTouchY = 0
 	const handleTouchStart = (e: TouchEvent) => {
-		lastTouchY = e.touches[0].clientY
+		const touch = e.touches[0]
+		if (touch) {
+			lastTouchY = touch.clientY
+		}
 		handleUserInteraction()
 	}
 
 	const handleTouchMove = (e: TouchEvent) => {
-		const touchY = e.touches[0].clientY
-		const deltaY = lastTouchY - touchY
-		lastTouchY = touchY
-		scrollOffset.update(v => v - deltaY, { hard: true })
+		const touch = e.touches[0]
+		if (touch) {
+			const touchY = touch.clientY
+			const deltaY = lastTouchY - touchY
+			lastTouchY = touchY
+			scrollOffset.update(v => v - deltaY, { hard: true })
+		}
 	}
-
-	const retry = () => { reloadCount += 1 }
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
 	<div class="empty-state z-10 m-auto flex h-full max-w-80 flex-col items-center justify-center text-center opacity-50 transition-opacity duration-500">
-		<Icon name={icon} class="mb-4 h-12 w-12 text-white/40" />
+		<Icon type={icon} class="mb-4 h-12 w-12 text-white/40" />
 		<h3 class="text-xl font-bold text-white">{title}</h3>
 		<p class="mt-2 text-sm text-white/60">{description}</p>
 	</div>

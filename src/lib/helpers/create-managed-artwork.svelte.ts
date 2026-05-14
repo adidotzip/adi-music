@@ -48,7 +48,7 @@ const scheduleCleanup = (artwork: Artwork) => {
 	}, thirtySeconds)
 }
 
-export const createManagedArtwork = (getImage: () => Blob | undefined | null) => {
+export const createManagedArtwork = (getImage: () => Blob | string | undefined | null) => {
 	const refId = Artwork.createRefId()
 
 	const artwork = $derived.by(() => {
@@ -56,6 +56,10 @@ export const createManagedArtwork = (getImage: () => Blob | undefined | null) =>
 
 		if (!image) {
 			return null
+		}
+
+		if (typeof image === 'string') {
+			return { url: image, refs: new Set() } // Mock instance for URL
 		}
 
 		let artworkInstance = cache.get(image)
@@ -74,13 +78,13 @@ export const createManagedArtwork = (getImage: () => Blob | undefined | null) =>
 		// Need to use variable here so cleanup uses
 		// previous value instead of the current one
 		const savedArtwork = artwork
-		if (!savedArtwork) {
+		if (!savedArtwork || typeof savedArtwork.url !== 'string' || !('image' in savedArtwork)) {
 			return
 		}
 
 		return () => {
 			if (savedArtwork.refs.size === 1) {
-				scheduleCleanup(savedArtwork)
+				scheduleCleanup(savedArtwork as Artwork)
 			}
 
 			if (import.meta.env.DEV && !savedArtwork.refs.has(refId)) {

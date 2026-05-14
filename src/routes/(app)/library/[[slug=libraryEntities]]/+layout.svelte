@@ -7,14 +7,12 @@
 	import ArtistListContainer from '$lib/components/ArtistListContainer.svelte'
 	import Button from '$lib/components/Button.svelte'
 	import IconButton from '$lib/components/IconButton.svelte'
-	import type { IconType } from '$lib/components/icon/Icon.svelte'
 	import Icon from '$lib/components/icon/Icon.svelte'
 	import ListDetailsLayout from '$lib/components/ListDetailsLayout.svelte'
 	import PlaylistListContainer from '$lib/components/playlists/PlaylistListContainer.svelte'
 	import TracksListContainer from '$lib/components/tracks/TracksListContainer.svelte'
 	import { initPageQueries } from '$lib/db/query/page-query.svelte.js'
 	import { isMobile } from '$lib/helpers/utils/ua.ts'
-	import { useSetOverlaySnippet } from '$lib/layout-bottom-bar.svelte.ts'
 	import { FAVORITE_PLAYLIST_ID } from '$lib/library/playlists-actions.ts'
 	import { getPlaylistMenuItems } from '$lib/menu-actions/playlists.ts'
 	import Search from './Search.svelte'
@@ -30,41 +28,10 @@
 	const slug = $derived(data.slug)
 	const isHandHeldDevice = isMobile()
 
-	interface NavItem {
-		slug: typeof slug
-		title: string
-		icon: IconType
-	}
-
-	const navItems: NavItem[] = [
-		{
-			slug: 'tracks',
-			title: m.tracks(),
-			icon: 'musicNote',
-		},
-		{
-			slug: 'albums',
-			title: m.albums(),
-			icon: 'album',
-		},
-		{
-			slug: 'artists',
-			title: m.artists(),
-			icon: 'person',
-		},
-		{
-			slug: 'playlists',
-			title: m.playlists(),
-			icon: 'playlist',
-		},
-	]
-
 	const isWideLayout = $derived(data.isWideLayout())
 	const layoutMode = $derived(
 		data.layoutMode(main.librarySplitLayoutEnabled, isWideLayout, page.params.uuid),
 	)
-
-	useSetOverlaySnippet('bottom-bar', () => layoutBottom)
 
 	export const snapshot: Snapshot<string> = {
 		capture: () => data.store.searchTerm,
@@ -74,53 +41,20 @@
 	}
 </script>
 
-{#snippet navItemsSnippet(className: string)}
-	{#each navItems as item}
-		<Button
-			as="a"
-			href={`/library/${item.slug}`}
-			kind="blank"
-			tooltip={item.title}
-			class={['flex shrink-0 items-center justify-center', className]}
-		>
-			<div
-				class={[
-					'flex items-center justify-center rounded-full p-2',
-					item.slug === slug && 'bg-secondaryContainer text-onSecondaryContainer',
-				]}
-			>
-				<Icon type={item.icon} />
-			</div>
-		</Button>
-	{/each}
-{/snippet}
-
-{#snippet layoutBottom()}
-	{#if isHandHeldDevice}
-		<div
-			class="pointer-events-auto grid h-16 w-full grid-cols-[repeat(auto-fit,minmax(0,1fr))] bg-surfaceContainer sm:hidden active-view-regular:view-name-[bottom-bar]"
-		>
-			{@render navItemsSnippet('h-full')}
-		</div>
-	{/if}
-{/snippet}
-
 {#if layoutMode !== 'details'}
 	<div
 		class={[
-			'desktop-sidebar fixed z-1 mt-20 h-max w-max flex-col items-center gap-2 [@media(max-height:500px)]:mt-2',
+			'desktop-sidebar fixed z-1 mt-60 h-max w-max flex-col items-center gap-2',
 			isHandHeldDevice ? 'hidden sm:flex' : 'flex',
 		]}
 	>
-		{@render navItemsSnippet('h-14 w-20')}
-
 		{#if (slug === 'albums' || slug === 'artists') && isWideLayout}
 			<IconButton
 				icon="sidePanel"
 				tooltip={main.librarySplitLayoutEnabled
 					? m.librarySplitViewDisable()
 					: m.librarySplitViewEnable()}
-				class={['mt-4', main.librarySplitLayoutEnabled && 'rotate-180']}
+				class={[main.librarySplitLayoutEnabled && 'rotate-180']}
 				onclick={() => {
 					main.librarySplitLayoutEnabled = !main.librarySplitLayoutEnabled
 				}}
@@ -131,7 +65,7 @@
 
 <ListDetailsLayout mode={layoutMode} class="mx-auto w-full max-w-(--app-max-content-width) grow">
 	{#snippet list(mode)}
-		<div class={[isHandHeldDevice ? 'sm:pl-20' : 'pl-20', 'flex grow flex-col']}>
+		<div class="flex grow flex-col">
 			<div class={[mode === 'both' && 'w-100', 'flex grow flex-col px-4']}>
 				<Search name={data.pluralTitle()} sortOptions={data.sortOptions} store={data.store} />
 

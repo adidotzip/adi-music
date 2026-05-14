@@ -7,6 +7,7 @@
 		APP_DIALOGS_KEYS,
 	} from '$lib/components/global-dialogs/dialogs.ts'
 	import Icon from '$lib/components/icon/Icon.svelte'
+    import type { IconType } from '$lib/components/icon/Icon.svelte'
 	import MenuRenderer, { setupGlobalMenu } from '$lib/components/menu/MenuRenderer.svelte'
 	import PlayerOverlay from '$lib/components/PlayerOverlay.svelte'
 	import SnackbarRenderer from '$lib/components/snackbar/SnackbarRenderer.svelte'
@@ -23,6 +24,7 @@
 		setupDirectoriesPermissionPrompt,
 	} from './layout/setup-directories-permission-prompt.svelte.ts'
 	import { setupTheme } from './layout/setup-theme.svelte.ts'
+    import { isMobile } from '$lib/helpers/utils/ua.ts'
 
 	// These context are in different files from their implementation
 	// to allow better trees shaking and inlining
@@ -69,7 +71,46 @@
 	if (browser) {
 		void setupDirectoriesPermissionPrompt(directoriesPermissionSnackbar)
 	}
+
+    const isHandHeldDevice = isMobile()
+
+    interface NavItem {
+		slug: string
+		title: string
+		icon: IconType
+        href: string
+	}
+
+	const navItems: NavItem[] = [
+        { slug: 'search', title: 'Search', icon: 'magnify', href: '/search' },
+		{ slug: 'tracks', title: m.tracks(), icon: 'musicNote', href: '/library/tracks' },
+		{ slug: 'albums', title: m.albums(), icon: 'album', href: '/library/albums' },
+		{ slug: 'artists', title: m.artists(), icon: 'person', href: '/library/artists' },
+		{ slug: 'playlists', title: m.playlists(), icon: 'playlist', href: '/library/playlists' },
+	]
 </script>
+
+{#snippet navItemsSnippet(className: string)}
+	{#each navItems as item}
+        {@const active = page.url.pathname === item.href || (item.slug !== 'search' && page.url.pathname.startsWith(item.href))}
+		<Button
+			as="a"
+			href={item.href}
+			kind="blank"
+			tooltip={item.title}
+			class={['flex shrink-0 items-center justify-center', className]}
+		>
+			<div
+				class={[
+					'flex items-center justify-center rounded-full p-2',
+					active && 'bg-secondaryContainer text-onSecondaryContainer',
+				]}
+			>
+				<Icon type={item.icon} />
+			</div>
+		</Button>
+	{/each}
+{/snippet}
 
 {#snippet directoriesPermissionSnackbar({ dirs, dismiss }: DirectoriesPermissionPromptSnackbarArg)}
 	<div class="flex w-full flex-col gap-1 pt-2 pb-1">
@@ -119,7 +160,18 @@
 	</div>
 {/if}
 
-{@render children()}
+<div
+    class={[
+        'desktop-sidebar fixed z-1 mt-20 h-max w-max flex-col items-center gap-2 [@media(max-height:500px)]:mt-2',
+        isHandHeldDevice ? 'hidden sm:flex' : 'flex',
+    ]}
+>
+    {@render navItemsSnippet('h-14 w-20')}
+</div>
+
+<main class="flex min-h-screen flex-col sm:pl-20">
+    {@render children()}
+</main>
 
 <div
 	class="page-overlay-container pointer-events-none fixed inset-x-0 bottom-0 grid gap-y-2 overflow-hidden"
@@ -137,7 +189,13 @@
 	</div>
 
 	<div bind:clientHeight={bottomBarHeight} class="col-[1/6]">
-		{@render overlaySnippets.bottomBar?.()}
+		{#if isHandHeldDevice}
+            <div
+                class="pointer-events-auto grid h-16 w-full grid-cols-[repeat(auto-fit,minmax(0,1fr))] bg-surfaceContainer active-view-regular:view-name-[bottom-bar]"
+            >
+                {@render navItemsSnippet('h-full')}
+            </div>
+        {/if}
 	</div>
 </div>
 

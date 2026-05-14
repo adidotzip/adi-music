@@ -59,7 +59,7 @@ class TrackProcessor {
 							...artworkData,
 							file: options.file,
 							directory: options.directoryId,
-							fileName: options.file.name,
+							fileName: (options.file as any).name || '',
 							scannedAt: options.scannedAt,
 							uuid: options.uuid ?? crypto.randomUUID(),
 						},
@@ -142,6 +142,7 @@ class StatusTracker {
 
 const findTrackByFileHandle = async (handle: FileSystemFileHandle, tracks: Track[]) => {
 	for (const track of tracks) {
+		if (typeof track.file === 'string') continue
 		const isSame = await handle.isSameEntry(track.file as FileSystemFileHandle)
 		if (isSame) {
 			return track
@@ -154,6 +155,9 @@ const findTrackByFileHandle = async (handle: FileSystemFileHandle, tracks: Track
 const findTrackByMixedFileEntity = async (handle: FileEntity, tracks: Track[]) => {
 	for (const track of tracks) {
 		const existingFile = track.file
+		if (typeof existingFile === 'string' || typeof handle === 'string') {
+			continue
+		}
 		// If file name is changed we can be sure it's not the same file anymore
 		if (existingFile.name !== handle.name) {
 			continue
@@ -207,7 +211,7 @@ const scanExistingDirectory = async (handles: FileEntity[], directoryId: number)
 			// but in the database we keep flat structure
 			const possibleExistingTracks = await db.getAllFromIndex('tracks', 'path', [
 				directoryId,
-				handle.name,
+				(handle as any).name,
 			])
 			const existingTrack = await findTrackFn(
 				// If `LEGACY_NO_NATIVE_DIRECTORY` is used this will be a `File` or `FileSystemFileHandle`

@@ -46,6 +46,16 @@ export interface TrackData extends Track {
 
 const trackConfig: QueryConfig<TrackData> = {
 	fetch: async (id) => {
+		// Online tracks have negative IDs and are stored in memory cache only
+		if (id < 0) {
+			const key = getCacheKey('tracks', id)
+			const cached = valueCache.get(key)
+			if (cached) {
+				return cached as TrackData
+			}
+			return undefined
+		}
+
 		const db = await getDatabase()
 		const tx = db.transaction(['tracks', 'playlistEntries'], 'readonly')
 
@@ -68,6 +78,8 @@ const trackConfig: QueryConfig<TrackData> = {
 		} as TrackData
 	},
 	shouldRefetch: (itemId, changes) => {
+		if (itemId !== undefined && itemId < 0) return false
+
 		for (const change of changes) {
 			if (change.storeName === 'playlistEntries') {
 				const playlistEntry = change.value
@@ -111,16 +123,42 @@ export interface AlbumData extends Album {
 }
 
 const albumConfig: QueryConfig<AlbumData> = {
-	fetch: (id) => dbGetValue('albums', 'album', id),
-	shouldRefetch: defaultRefreshOnDatabaseChanges.bind(null, 'albums'),
+	fetch: async (id) => {
+		if (id < 0) {
+			const key = getCacheKey('albums', id)
+			const cached = valueCache.get(key)
+			if (cached) {
+				return cached as AlbumData
+			}
+			return undefined
+		}
+		return (await dbGetValue('albums', 'album', id)) as AlbumData | undefined
+	},
+	shouldRefetch: (itemId, changes) => {
+		if (itemId !== undefined && itemId < 0) return false
+		return defaultRefreshOnDatabaseChanges('albums', itemId, changes)
+	},
 }
 export interface ArtistData extends Artist {
 	type: 'artist'
 }
 
 const artistConfig: QueryConfig<ArtistData> = {
-	fetch: (id) => dbGetValue('artists', 'artist', id),
-	shouldRefetch: defaultRefreshOnDatabaseChanges.bind(null, 'artists'),
+	fetch: async (id) => {
+		if (id < 0) {
+			const key = getCacheKey('artists', id)
+			const cached = valueCache.get(key)
+			if (cached) {
+				return cached as ArtistData
+			}
+			return undefined
+		}
+		return (await dbGetValue('artists', 'artist', id)) as ArtistData | undefined
+	},
+	shouldRefetch: (itemId, changes) => {
+		if (itemId !== undefined && itemId < 0) return false
+		return defaultRefreshOnDatabaseChanges('artists', itemId, changes)
+	},
 }
 
 export interface PlaylistData extends Playlist {
@@ -128,7 +166,7 @@ export interface PlaylistData extends Playlist {
 }
 
 const playlistsConfig: QueryConfig<PlaylistData> = {
-	fetch: (id) => {
+	fetch: async (id) => {
 		if (id === FAVORITE_PLAYLIST_ID) {
 			const favoritePlaylist: PlaylistData = {
 				type: 'playlist',
@@ -139,12 +177,24 @@ const playlistsConfig: QueryConfig<PlaylistData> = {
 				createdAt: 0,
 			}
 
-			return Promise.resolve(favoritePlaylist)
+			return favoritePlaylist
 		}
 
-		return dbGetValue('playlists', 'playlist', id)
+		if (id < 0) {
+			const key = getCacheKey('playlists', id)
+			const cached = valueCache.get(key)
+			if (cached) {
+				return cached as PlaylistData
+			}
+			return undefined
+		}
+
+		return (await dbGetValue('playlists', 'playlist', id)) as PlaylistData | undefined
 	},
-	shouldRefetch: defaultRefreshOnDatabaseChanges.bind(null, 'playlists'),
+	shouldRefetch: (itemId, changes) => {
+		if (itemId !== undefined && itemId < 0 && itemId !== FAVORITE_PLAYLIST_ID) return false
+		return defaultRefreshOnDatabaseChanges('playlists', itemId, changes)
+	},
 }
 
 interface LibraryValueMap {
@@ -336,4 +386,14 @@ export const shouldRefetchLibraryValue = (
 /** @private - Used for testing only */
 export const clearLibraryValueCache = () => {
 	valueCache.clear()
+}
+
+/** @public */
+export const cacheLibraryValue = <Store extends LibraryStoreName>(
+	storeName: Store,
+	id: number,
+	value: LibraryValue<Store>,
+): void => {
+	const key = getCacheKey(storeName, id)
+	valueCache.set(key, value)
 }

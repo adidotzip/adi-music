@@ -1,3 +1,4 @@
+import { browser } from '$app/environment'
 import { getDatabase } from '$lib/db/database'
 import type { FileEntity } from '$lib/helpers/file-system'
 import { isAndroid, isChromiumBased } from '$lib/helpers/utils/ua'
@@ -60,7 +61,7 @@ const getTrackFile = async (directoryId: number, entity: FileEntity) => {
 		else if (isAndroid() && isChromiumBased()) {
 			trackFile = await getTrackFileWorkaroundForAndroid(directoryId, entity.name)
 		} else {
-			trackFile = await getTrackFileRegular(entity)
+			trackFile = await getTrackFileRegular(entity as FileSystemFileHandle)
 		}
 
 		if (trackFile) {
@@ -85,16 +86,25 @@ export class AudioLoader {
 	#onSrc: (src: string | null) => void
 	#currentSrc: string | null = null
 	#current = 0
+	#isOnlineSrc = false
 
 	constructor(onSrc: (src: string | null) => void) {
 		this.#onSrc = onSrc
 	}
 
-	load = async (directoryId: number, file: FileEntity) => {
+	load = async (directoryId: number, file: FileEntity | string) => {
 		this.#current += 1
 		const gen = this.#current
 		this.loading = true
 		this.#clearSrc()
+
+		if (typeof file === 'string') {
+			this.#currentSrc = file
+			this.#isOnlineSrc = true
+			this.#onSrc(this.#currentSrc)
+			this.loading = false
+			return { status: 'loaded' } as const
+		}
 
 		const { status: trackStatus, file: trackFile } = await getTrackFile(directoryId, file)
 		if (this.#current !== gen) {
@@ -108,6 +118,7 @@ export class AudioLoader {
 		}
 
 		this.#currentSrc = URL.createObjectURL(trackFile)
+		this.#isOnlineSrc = false
 		this.#onSrc(this.#currentSrc)
 		this.loading = false
 		return { status: 'loaded' } as const
@@ -121,8 +132,11 @@ export class AudioLoader {
 
 	#clearSrc = (): void => {
 		if (this.#currentSrc) {
-			URL.revokeObjectURL(this.#currentSrc)
+			if (!this.#isOnlineSrc && browser) {
+				URL.revokeObjectURL(this.#currentSrc)
+			}
 			this.#currentSrc = null
+			this.#isOnlineSrc = false
 		}
 		this.#onSrc(null)
 	}

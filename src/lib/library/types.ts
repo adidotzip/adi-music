@@ -27,6 +27,7 @@ export type StringOrUnknownItem = (string & {}) | UnknownItem
 interface BaseMusicItem {
 	id: number
 	name: string
+	source?: 'jiosaavn'
 }
 
 export interface ParsedTrackData {
@@ -43,15 +44,15 @@ export interface ParsedTrackData {
 	language?: string
 	image?: {
 		optimized: boolean
-		small: Blob
-		full: Blob
+		small: Blob | string
+		full: Blob | string
 	}
 	primaryColor?: number
 }
 
 export interface UnknownTrack extends ParsedTrackData {
 	uuid: string
-	file: FileEntity
+	file: FileEntity | string
 	scannedAt: number
 	fileName: string
 	directory: number
@@ -63,7 +64,7 @@ export interface Album extends BaseMusicItem {
 	uuid: string
 	artists: string[]
 	year?: string
-	image?: Blob
+	image?: Blob | string
 }
 
 export interface Artist extends BaseMusicItem {
