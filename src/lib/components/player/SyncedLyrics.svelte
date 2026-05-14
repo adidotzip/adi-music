@@ -247,7 +247,7 @@
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
 	<div class="empty-state z-10 m-auto flex max-w-80 flex-col items-center text-center">
-		</div>
+	</div>
 {/snippet}
 
 <section class={["lyrics-shell w-full h-full relative overflow-hidden bg-black", className]} aria-live="polite">
@@ -343,7 +343,6 @@
 		right: 0;
 		display: flex;
 		flex-direction: column;
-		/* Mobile-optimized padding */
 		padding: 0 1.25rem;
 		@media (min-width: 640px) { padding: 0 2rem; }
 		padding-bottom: calc(env(safe-area-inset-bottom) + 50vh);
@@ -357,13 +356,14 @@
 		background: transparent;
 		border: none;
 		margin: 0;
-		padding: 1.25rem 0; 
+		padding: 1.25rem 0;
 		transform-origin: left center;
 		will-change: transform, opacity, filter;
 		
-		opacity: calc(0.25 / (1 + var(--distance) * 0.5));
-		transform: scale(calc(1 - var(--distance) * 0.05));
-		filter: blur(calc(var(--distance) * 2.5px));
+		/* Apple Music style approach animation */
+		opacity: max(0.15, 1 - (var(--distance) * 0.35));
+		transform: scale(max(0.75, 1 - (var(--distance) * 0.06)));
+		filter: blur(min(8px, var(--distance) * 2px));
 		
 		transition:
 			opacity 0.7s cubic-bezier(0.25, 1, 0.5, 1),
@@ -371,9 +371,16 @@
 			filter 0.7s cubic-bezier(0.25, 1, 0.5, 1);
 	}
 
+	/* Force secondary lines to the right and scale from the right */
+	.lyric-item.secondary-line {
+		transform-origin: right center;
+		text-align: right;
+		padding-left: 20%; 
+		margin-top: -0.5rem; /* Tucks it slightly closer to the main lyric */
+	}
+
 	.lyric-line {
 		font-family: var(--font-sans);
-		/* Mobile-first font sizing */
 		font-size: 2.15rem;
 		@media (min-width: 640px) { font-size: 2.75rem; }
 		@media (min-width: 1024px) { font-size: 3.5rem; }
@@ -381,7 +388,7 @@
 		line-height: 1.15;
 		letter-spacing: -0.03em;
 		white-space: pre-wrap;
-		color: #fff;
+		color: rgba(255, 255, 255, 0.3); /* Default dim state */
 		cursor: pointer;
 	}
 
@@ -392,21 +399,19 @@
 	}
 
 	.lyric-item.past {
-		opacity: calc(0.15 / (1 + var(--distance) * 0.75));
+		opacity: max(0.1, 1 - (var(--distance) * 0.5));
 	}
 
 	.lyric-line.secondary-line {
-		/* Scale down for secondary lines on mobile */
 		font-size: 1.5rem;
 		@media (min-width: 640px) { font-size: 1.75rem; }
 		@media (min-width: 1024px) { font-size: 2.5rem; }
 		font-weight: 700;
-		color: rgba(255, 255, 255, 0.7);
+		color: rgba(255, 255, 255, 0.4); /* Slightly dimmer than main lines */
 	}
 
 	.lyric-word.secondary-word {
 		font-size: 0.85em; 
-		color: rgba(255, 255, 255, 0.75);
 	}
 
 	.lyric-word {
@@ -415,14 +420,18 @@
 		margin-right: 0.15em;
 	}
 
+	/* Fixes the "Weird White Color" bleed */
 	.lyric-line.active .lyric-word {
 		background: linear-gradient(
 			to right,
-			#ffffff calc(var(--word-progress) - 10%),
-			rgba(255, 255, 255, 0.3) calc(var(--word-progress) + 10%)
+			#ffffff 0%,
+			#ffffff var(--word-progress),
+			rgba(255, 255, 255, 0.3) var(--word-progress),
+			rgba(255, 255, 255, 0.3) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
+		-webkit-text-fill-color: transparent;
 		color: transparent;
 		transition: none;
 	}
@@ -430,11 +439,15 @@
 	.lyric-line.active .lyric-word.secondary-word {
 		background: linear-gradient(
 			to right,
-			rgba(255, 255, 255, 0.85) calc(var(--word-progress) - 10%),
-			rgba(255, 255, 255, 0.2) calc(var(--word-progress) + 10%)
+			rgba(255, 255, 255, 0.9) 0%,
+			rgba(255, 255, 255, 0.9) var(--word-progress),
+			rgba(255, 255, 255, 0.3) var(--word-progress),
+			rgba(255, 255, 255, 0.3) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
+		-webkit-text-fill-color: transparent;
+		color: transparent;
 	}
 
 	.lyric-break {
