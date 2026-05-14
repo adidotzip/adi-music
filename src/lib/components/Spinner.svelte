@@ -1,55 +1,93 @@
 <script lang="ts">
-	// Spinner from https://codepen.io/mrrocks/pen/EiplA
-
 	interface Props {
 		class?: ClassValue
+		size?: number
+		container?: boolean
+		ariaLabel?: string
 	}
 
-	const { class: className }: Props = $props()
+	const { class: className, size = 40, container = false, ariaLabel }: Props = $props()
 </script>
 
-<svg class={['spinner', className]} fill="transparent" width="40" height="40" viewBox="0 0 66 66">
-	<circle class="path" cx="33" cy="33" r="30" />
+<svg
+	class={['m3-loading-indicator', container && 'container', className]}
+	width={size}
+	height={size}
+	viewBox="0 0 48 48"
+	role="progressbar"
+	aria-label={ariaLabel}
+	aria-valuemin="0"
+	aria-valuemax="100"
+>
+	<g class="m3-loading-indicator-shapes">
+		<circle class="shape shape-1" cx="24" cy="8" r="5.5" />
+		<circle class="shape shape-2" cx="40" cy="24" r="5.5" />
+		<circle class="shape shape-3" cx="24" cy="40" r="5.5" />
+		<circle class="shape shape-4" cx="8" cy="24" r="5.5" />
+	</g>
 </svg>
 
-<style>
-	.spinner {
-		--spinner-duration: 1.4s;
-		--spinner-offset: 187;
-		animation: rotate var(--spinner-duration) linear infinite;
-		color: currentcolor;
+<style lang="postcss">
+	@reference '../../app.css';
+	.m3-loading-indicator {
+		color: var(--color-primary);
+		overflow: visible;
 	}
 
-	.path {
-		stroke: currentcolor;
-		stroke-width: 6;
-		stroke-linecap: round;
-		stroke-dasharray: var(--spinner-offset);
-		stroke-dashoffset: 0;
+	.container {
+		padding: --spacing(1);
+		border-radius: 9999px;
+		background: var(--color-primaryContainer);
+		color: var(--color-onPrimaryContainer);
+	}
+
+	.m3-loading-indicator-shapes {
 		transform-origin: center;
-		animation: dash var(--spinner-duration) ease-in-out infinite;
+		animation: m3-loading-indicator-rotate 1.6s cubic-bezier(0.2, 0, 0, 1) infinite;
 	}
 
-	@keyframes rotate {
-		0% {
-			transform: rotate(0deg);
+	.shape {
+		fill: currentcolor;
+		transform-box: fill-box;
+		transform-origin: center;
+		animation: m3-loading-indicator-pulse 1.6s cubic-bezier(0.2, 0, 0, 1) infinite;
+	}
+
+	.shape-2 {
+		animation-delay: 0.1s;
+	}
+
+	.shape-3 {
+		animation-delay: 0.2s;
+	}
+
+	.shape-4 {
+		animation-delay: 0.3s;
+	}
+
+	@keyframes m3-loading-indicator-rotate {
+		to {
+			transform: rotate(360deg);
 		}
+	}
+
+	@keyframes m3-loading-indicator-pulse {
+		0%,
 		100% {
-			transform: rotate(270deg);
+			transform: scale(0.72);
+			opacity: 0.62;
 		}
-	}
 
-	@keyframes dash {
-		0% {
-			stroke-dashoffset: var(--spinner-offset);
-		}
 		50% {
-			stroke-dashoffset: 46.75;
-			transform: rotate(135deg);
+			transform: scale(1.18);
+			opacity: 1;
 		}
-		100% {
-			stroke-dashoffset: var(--spinner-offset);
-			transform: rotate(450deg);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.m3-loading-indicator-shapes,
+		.shape {
+			animation-duration: 3.2s;
 		}
 	}
 </style>
