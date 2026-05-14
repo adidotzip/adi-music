@@ -281,6 +281,8 @@
 					{@const distance = Math.abs(itemIndex - activeLineIndex)}
 
 					{#if item.type === 'break'}
+						{@const breakDuration = item.endTime - item.startTime}
+						{@const breakProgress = isActiveLine ? Math.min(Math.max((smoothTimeMs - item.startTime) / breakDuration, 0), 1) : 0}
 						<div
 							class="lyric-item lyric-break"
 							class:active={isActiveLine}
@@ -289,9 +291,9 @@
 							style="--distance: {distance}"
 						>
 							<div class="dots-container">
-								<span class="dot"></span>
-								<span class="dot"></span>
-								<span class="dot"></span>
+								<span class="dot" class:filled={breakProgress >= 0.25}></span>
+								<span class="dot" class:filled={breakProgress >= 0.50}></span>
+								<span class="dot" class:filled={breakProgress >= 0.75}></span>
 							</div>
 						</div>
 					{:else}
@@ -419,7 +421,6 @@
 		opacity: 1;
 		transform: scale(1.02); /* Slight pop for the active line */
 		filter: blur(0);
-		text-shadow: 0 4px 24px rgba(255, 255, 255, 0.15); /* Soft glow behind active text */
 	}
 
 	.lyric-item.past {
@@ -493,17 +494,8 @@
 		transition: background-color 0.4s ease, transform 0.4s ease;
 	}
 
-	.lyric-break.active .dot {
-		background-color: rgba(255, 255, 255, 0.8);
-		animation: pulse-dot 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.lyric-break.active .dot:nth-child(1) { animation-delay: 0s; }
-	.lyric-break.active .dot:nth-child(2) { animation-delay: 0.15s; }
-	.lyric-break.active .dot:nth-child(3) { animation-delay: 0.3s; }
-
-	@keyframes pulse-dot {
-		0%, 100% { transform: scale(1); opacity: 0.4; }
-		50% { transform: scale(1.4); opacity: 1; box-shadow: 0 0 12px rgba(255, 255, 255, 0.4); }
+	.dot.filled {
+		background-color: rgba(255, 255, 255, 0.9);
+		transform: scale(1.3);
 	}
 </style>
