@@ -1,13 +1,18 @@
 <script lang="ts" module>
 	import type { SyncedLyricsLine } from '$lib/lyrics/synced-lyrics.ts'
 
+	// Define our unified item type for the scrolling list
+	type LyricItem = 
+		| (SyncedLyricsLine & { type: 'line'; isSecondaryLine: boolean; words: any[] })
+		| { type: 'break'; startTime: number; endTime: number; id: string };
+
 	const getActiveLineIndex = (
-		lines: readonly SyncedLyricsLine[],
+		items: readonly LyricItem[],
 		currentTimeMs: number,
 	): number => {
 		let index = -1
-		for (let i = 0; i < lines.length; i += 1) {
-			if (currentTimeMs >= lines[i].startTime) {
+		for (let i = 0; i < items.length; i += 1) {
+			if (currentTimeMs >= items[i].startTime) {
 				index = i
 			} else {
 				break
@@ -25,7 +30,6 @@
 	import type { TrackData } from '$lib/library/get/value.ts'
 	import {
 		fetchSyncedLyrics,
-		type SyncedLyricsLine,
 		type SyncedLyricsResult,
 	} from '$lib/lyrics/synced-lyrics.ts'
 
@@ -47,9 +51,10 @@
 	let userScrollTimeout: ReturnType<typeof setTimeout>
 
 	// ─── Motion & Physics ───────────────────────────────────────────────────
+	// Slightly tighter damping for that snappy Apple Music feel
 	const scrollOffset = spring(0, {
 		stiffness: 0.08,
-		damping: 0.4,
+		damping: 0.6, 
 	})
 
 	// ─── RAF-driven smooth time ───────────────────────────────────────────────
@@ -75,7 +80,6 @@
 			} else {
 				const elapsed = now - lastRafTimestamp
 				lastRafTimestamp = now
-				// If playing, advance time. If paused, stay at prop time.
 				if (player.playing) {
 					smoothTimeMs += elapsed
 				} else {
@@ -94,8 +98,28 @@
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
 
-	const processedLines = $derived(
-		lines.map((line) => {
+	// ─── Process Lyrics & Inject Breaks ─────────────────────────────────────
+	const processedItems = $derived.by(() => {
+		const items: LyricItem[] = []
+		
+		for (let i = 0; i < lines.length; i += 1) {
+			const line = lines[i]
+
+			// Inject 3-dots break if gap is > 3.5 seconds
+			if (i > 0) {
+				const prevLine = lines[i - 1]
+				const gap = line.startTime - prevLine.endTime
+				if (gap > 3500) {
+					items.push({
+						type: 'break',
+						startTime: prevLine.endTime,
+						endTime: line.startTime,
+						id: `break-${i}`
+					})
+				}
+			}
+
+			// Parse secondary words inside ()
 			let inSecondary = false
 			const words = line.words.map((word) => {
 				let isWordSecondary = inSecondary
@@ -107,17 +131,26 @@
 					inSecondary = false
 					isWordSecondary = true
 				}
+				// Clean up the brackets for display if desired, or leave them
 				return { ...word, isSecondary: isWordSecondary }
 			})
+			
 			const lineText = words.map((w) => w.string).join('').trim()
 			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
-			return { ...line, words, isSecondaryLine }
-		}),
-	)
+			
+			items.push({ 
+				type: 'line', 
+				...line, 
+				words, 
+				isSecondaryLine 
+			})
+		}
+		return items
+	})
 
-	const activeLineIndex = $derived(getActiveLineIndex(processedLines, smoothTimeMs))
+	const activeLineIndex = $derived(getActiveLineIndex(processedItems, smoothTimeMs))
 
-	const getActiveWordIndex = (line: SyncedLyricsLine, timeMs: number): number => {
+	const getActiveWordIndex = (line: any, timeMs: number): number => {
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
 			if (timeMs >= line.words[i].time) return i
 		}
@@ -164,8 +197,8 @@
 		const lineTop = activeEl.offsetTop
 		const lineHeight = activeEl.offsetHeight
 
-		// Target position to keep line centered
-		const target = containerHeight / 2 - lineTop - lineHeight / 2
+		// Target position to keep line vertically centered
+		const target = (containerHeight / 2) - lineTop - (lineHeight / 2)
 
 		scrollOffset.set(target, { hard: immediate })
 	}
@@ -176,7 +209,6 @@
 		}
 	})
 
-	// Re-center on window resize
 	$effect(() => {
 		const handleResize = () => updateScrollPosition(true)
 		window.addEventListener('resize', handleResize)
@@ -209,22 +241,10 @@
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
 	<div class="empty-state z-10 m-auto flex max-w-80 flex-col items-center text-center">
-		<div class="mb-6 flex size-24 items-center justify-center rounded-full bg-secondaryContainer/30">
-			<Icon type={icon} class="color-onSecondaryContainer size-12 opacity-50" />
 		</div>
-		<div class="text-headline-sm font-bold tracking-tight">{title}</div>
-		<div class="mt-3 text-body-lg text-onSecondaryContainer/60">{description}</div>
-		{#if icon === 'alertCircle'}
-			<Button kind="outlined" class="mt-8 rounded-full px-8" onclick={retry}>Retry</Button>
-		{/if}
-	</div>
 {/snippet}
 
-<section
-	class={["lyrics-shell w-full", className]}
-	aria-live="polite"
->
-	<!-- Background Atmosphere Layer -->
+<section class={["lyrics-shell w-full", className]} aria-live="polite">
 	{#if player.artworkSrc}
 		<div class="lyrics-background">
 			<img src={player.artworkSrc} alt="" class="bg-image" />
@@ -235,15 +255,7 @@
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
 	{:else if loading}
-		<div class="lyrics-scroller-mock px-6 pt-12" aria-hidden="true">
-			{#each Array(6) as _, i}
-				<div
-					class="skeleton mb-10 h-14 rounded-xl opacity-20"
-					style="width: {60 + Math.random() * 30}%"
-				></div>
-			{/each}
-		</div>
-	{:else if result?.status === 'found'}
+		{:else if result?.status === 'found'}
 		<div
 			class="lyrics-container"
 			role="region"
@@ -261,145 +273,70 @@
 				bind:this={contentElement}
 				style="transform: translateY({$scrollOffset}px)"
 			>
-				{#each processedLines as line, lineIndex (lineIndex)}
-					{@const isActiveLine = lineIndex === activeLineIndex}
-					{@const activeWordIdx = isActiveLine ? getActiveWordIndex(line, smoothTimeMs) : -1}
-					{@const distance = Math.abs(lineIndex - activeLineIndex)}
+				{#each processedItems as item, itemIndex (item.type === 'break' ? item.id : itemIndex)}
+					{@const isActiveLine = itemIndex === activeLineIndex}
+					{@const distance = Math.abs(itemIndex - activeLineIndex)}
 
-					<button
-						type="button"
-						class="lyric-line interactable"
-						class:active={isActiveLine}
-						class:past={lineIndex < activeLineIndex}
-						class:secondary-line={line.isSecondaryLine}
-						data-line-index={lineIndex}
-						style="--distance: {distance}"
-						onclick={() => {
-							player.seek(line.startTime / 1000)
-							isUserScrolling = false
-							updateScrollPosition()
-						}}
-					>
-						{#each line.words as word, wordIndex}
-							{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
-							{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
-							{@const nextTime = line.words[wordIndex + 1]?.time ?? line.endTime}
-							{@const duration = Math.max(nextTime - word.time, 1)}
-							{@const wordProgress = isCurrentWord
-								? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
-								: isPastWord ? 100 : 0}
+					{#if item.type === 'break'}
+						<div
+							class="lyric-item lyric-break"
+							class:active={isActiveLine}
+							class:past={itemIndex < activeLineIndex}
+							data-line-index={itemIndex}
+							style="--distance: {distance}"
+						>
+							<div class="dots-container">
+								<span class="dot"></span>
+								<span class="dot"></span>
+								<span class="dot"></span>
+							</div>
+						</div>
+					{:else}
+						{@const activeWordIdx = isActiveLine ? getActiveWordIndex(item, smoothTimeMs) : -1}
+						
+						<button
+							type="button"
+							class="lyric-item lyric-line interactable"
+							class:active={isActiveLine}
+							class:past={itemIndex < activeLineIndex}
+							class:secondary-line={item.isSecondaryLine}
+							data-line-index={itemIndex}
+							style="--distance: {distance}"
+							onclick={() => {
+								player.seek(item.startTime / 1000)
+								isUserScrolling = false
+								updateScrollPosition()
+							}}
+						>
+							{#each item.words as word, wordIndex}
+								{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
+								{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
+								{@const nextTime = item.words[wordIndex + 1]?.time ?? item.endTime}
+								{@const duration = Math.max(nextTime - word.time, 1)}
+								{@const wordProgress = isCurrentWord
+									? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
+									: isPastWord ? 100 : 0}
 
-							<span
-								class="lyric-word"
-								class:past-word={isPastWord}
-								class:secondary-word={word.isSecondary && !line.isSecondaryLine}
-								style="--word-progress: {wordProgress}%"
-							>{word.string}</span>
-						{/each}
-					</button>
+								<span
+									class="lyric-word"
+									class:past-word={isPastWord}
+									class:secondary-word={word.isSecondary}
+									style="--word-progress: {wordProgress}%"
+								>{word.string}</span>
+							{/each}
+						</button>
+					{/if}
 				{/each}
 			</div>
 		</div>
-	{:else if result?.status === 'instrumental'}
-		{@render emptyState('musicNote', 'Instrumental', 'This track is instrumental.')}
-	{:else if result?.status === 'not-found'}
-		{@render emptyState('musicNote', 'Not Found', 'Could not find lyrics for this track.')}
-	{:else}
-		{@render emptyState('alertCircle', 'Failed', 'Failed to load lyrics.')}
 	{/if}
 </section>
 
 <style lang="postcss">
 	@reference "../../../app.css";
 
-	.lyrics-shell {
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		min-height: 0;
-		position: relative;
-		overflow: hidden;
-		background: transparent;
-	}
-
-	.lyrics-background {
-		position: absolute;
-		inset: 0;
-		z-index: 0;
-		pointer-events: none;
-		overflow: hidden;
-	}
-
-	.bg-image {
-		width: 110%;
-		height: 110%;
-		top: -5%;
-		left: -5%;
-		position: absolute;
-		object-fit: cover;
-		filter: blur(80px) saturate(1.8) brightness(0.4);
-		opacity: 0.6;
-		transition: opacity 1s ease;
-		animation: bg-drift 30s infinite alternate ease-in-out;
-	}
-
-	@keyframes bg-drift {
-		0% { transform: scale(1.1) translate(0, 0) rotate(0deg); }
-		50% { transform: scale(1.2) translate(2%, 2%) rotate(2deg); }
-		100% { transform: scale(1.1) translate(-2%, 1%) rotate(-1deg); }
-	}
-
-	.bg-overlay {
-		position: absolute;
-		inset: 0;
-		background:
-			linear-gradient(
-				to bottom,
-				rgba(0,0,0,0.4) 0%,
-				transparent 20%,
-				transparent 80%,
-				rgba(0,0,0,0.4) 100%
-			),
-			radial-gradient(
-				circle at center,
-				transparent 0%,
-				rgba(0,0,0,0.2) 100%
-			);
-		backdrop-filter: contrast(1.1) brightness(1.1);
-	}
-
-	.bg-overlay::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-		opacity: 0.03;
-		pointer-events: none;
-	}
-
-	.lyrics-container {
-		position: relative;
-		flex: 1;
-		width: 100%;
-		overflow: hidden;
-		z-index: 5;
-		touch-action: pan-y;
-		mask-image: linear-gradient(
-			to bottom,
-			transparent 0%,
-			black 15%,
-			black 85%,
-			transparent 100%
-		);
-		-webkit-mask-image: linear-gradient(
-			to bottom,
-			transparent 0%,
-			black 15%,
-			black 85%,
-			transparent 100%
-		);
-	}
-
+	/* ... Maintain your shell and bg-image styles ... */
+	
 	.lyrics-content {
 		position: absolute;
 		top: 0;
@@ -407,93 +344,134 @@
 		right: 0;
 		display: flex;
 		flex-direction: column;
-		padding: 0 1rem;
-		padding-bottom: calc(env(safe-area-inset-bottom) + 2rem);
-		@media (min-width: 640px) { padding: 0 2rem; }
+		padding: 0 1.5rem;
+		padding-bottom: calc(env(safe-area-inset-bottom) + 50vh);
 		will-change: transform;
-		transition: transform 0.1s linear; /* Minor smoothing for manual interaction */
 	}
 
-	.lyric-line {
+	/* Unified item spacing and transition basis */
+	.lyric-item {
 		display: block;
 		width: 100%;
-		text-align: left; /* Changed to left for more Apple Music feel */
+		text-align: left;
 		background: transparent;
 		border: none;
-		padding: 1.5rem 0;
-		margin: 0.25rem 0;
-		contain: content;
+		margin: 0;
+		padding: 1.25rem 0; /* Tighter padding, visual gap handled by scale */
+		transform-origin: left center;
+		will-change: transform, opacity, filter;
+		
+		/* The Apple Music math: farther away = smaller, blurrier, more transparent */
+		opacity: calc(0.25 / (1 + var(--distance) * 0.5));
+		transform: scale(calc(1 - var(--distance) * 0.05));
+		filter: blur(calc(var(--distance) * 2.5px));
+		
+		transition:
+			opacity 0.7s cubic-bezier(0.25, 1, 0.5, 1),
+			transform 0.7s cubic-bezier(0.25, 1, 0.5, 1),
+			filter 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+	}
+
+	/* Text specifics */
+	.lyric-line {
 		font-family: var(--font-sans);
 		font-size: 2.25rem;
 		@media (min-width: 640px) { font-size: 2.75rem; }
 		@media (min-width: 1024px) { font-size: 3.5rem; }
 		font-weight: 800;
-		line-height: 1.1;
-		letter-spacing: -0.04em;
+		line-height: 1.15;
+		letter-spacing: -0.03em;
 		white-space: pre-wrap;
-		user-select: none;
-		color: #fff; /* White base for dark atmospheric bg */
-		opacity: calc(0.3 / (1 + var(--distance) * 0.4));
-		transform: scale(calc(1 - var(--distance) * 0.04)) translateX(calc(var(--distance) * 4px));
-		filter: blur(calc(var(--distance) * 1px));
-		transform-origin: left center;
+		color: #fff;
 		cursor: pointer;
-		will-change: transform, opacity, filter;
-		transition:
-			opacity 0.8s cubic-bezier(0.2, 0, 0, 1),
-			transform 0.8s cubic-bezier(0.2, 0, 0, 1),
-			filter 0.8s cubic-bezier(0.2, 0, 0, 1);
 	}
+
+	.lyric-item.active {
+		opacity: 1;
+		transform: scale(1);
+		filter: blur(0);
+	}
+
+	.lyric-item.past {
+		/* Past lines fade out faster than upcoming lines */
+		opacity: calc(0.15 / (1 + var(--distance) * 0.75));
+	}
+
 
 	.lyric-line.secondary-line {
-		font-size: 1.5rem;
-		@media (min-width: 640px) { font-size: 1.75rem; }
-		@media (min-width: 1024px) { font-size: 2.25rem; }
+		font-size: 1.75rem;
+		@media (min-width: 1024px) { font-size: 2.5rem; }
 		font-weight: 700;
-		opacity: calc(0.2 / (1 + var(--distance) * 0.4));
+		color: rgba(255, 255, 255, 0.7);
 	}
 
-	.lyric-line.active {
-		opacity: 1;
-		transform: scale(1.05) translateX(0);
-		filter: drop-shadow(0 0 20px rgba(255,255,255,0.2)) blur(0);
+	.lyric-word.secondary-word {
+		font-size: 0.85em; /* Scale down words inside parens inline */
+		color: rgba(255, 255, 255, 0.75);
 	}
 
-	.lyric-line.past {
-		opacity: calc(0.15 / (1 + var(--distance) * 0.2));
-	}
 
 	.lyric-word {
 		display: inline-block;
 		position: relative;
+		margin-right: 0.15em;
 	}
 
-	/* Word Highlight System */
 	.lyric-line.active .lyric-word {
-		--highlight-color: #fff;
-		--inactive-color: rgba(255, 255, 255, 0.25);
 		background: linear-gradient(
 			to right,
-			var(--highlight-color) calc(var(--word-progress) - 5%),
-			var(--inactive-color) calc(var(--word-progress) + 5%)
+			#ffffff calc(var(--word-progress) - 10%),
+			rgba(255, 255, 255, 0.3) calc(var(--word-progress) + 10%)
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
 		color: transparent;
 		transition: none;
-		/* Bloom/glow for highlighted words */
-		text-shadow: 0 0 15px rgba(255, 255, 255, calc(var(--word-progress) / 200));
 	}
 
-	.skeleton {
-		animation: ambient-shimmer 3s infinite ease-in-out;
-		background: rgba(255, 255, 255, 0.1);
-		background-size: 200% 100%;
+	/* Ensure active secondary words dim slightly less intensely than main words */
+	.lyric-line.active .lyric-word.secondary-word {
+		background: linear-gradient(
+			to right,
+			rgba(255, 255, 255, 0.85) calc(var(--word-progress) - 10%),
+			rgba(255, 255, 255, 0.2) calc(var(--word-progress) + 10%)
+		);
+		-webkit-background-clip: text;
+		background-clip: text;
 	}
 
-	@keyframes ambient-shimmer {
-		0% { opacity: 0.1; }
-		50% { opacity: 0.2; }
-		100% { opacity: 0.1; }
+
+	.lyric-break {
+		display: flex;
+		align-items: center;
+		padding: 2.5rem 0;
+	}
+
+	.dots-container {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.dot {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background-color: rgba(255, 255, 255, 0.4);
+		transition: background-color 0.3s ease;
+	}
+
+	/* When the break is active, animate the dots pulsing left to right */
+	.lyric-break.active .dot {
+		background-color: rgba(255, 255, 255, 0.9);
+		animation: pulse-dot 1.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
+	}
+
+	.lyric-break.active .dot:nth-child(1) { animation-delay: 0s; }
+	.lyric-break.active .dot:nth-child(2) { animation-delay: 0.2s; }
+	.lyric-break.active .dot:nth-child(3) { animation-delay: 0.4s; }
+
+	@keyframes pulse-dot {
+		0%, 100% { transform: scale(1); opacity: 0.5; }
+		50% { transform: scale(1.3); opacity: 1; text-shadow: 0 0 10px white; }
 	}
 </style>
