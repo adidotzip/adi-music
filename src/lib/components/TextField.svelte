@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { TextField as M3TextField } from 'm3-svelte'
+
 	interface TextFieldProps {
 		value?: string
 		name: string
-		type?: 'text'
+		type?: 'text' | 'password' | 'number' | 'email' | 'url' | 'tel' | 'search'
+		label?: string
 		placeholder?: string
 		minLength?: number
 		maxLength?: number
@@ -14,6 +17,7 @@
 		name,
 		value = $bindable(''),
 		type = 'text',
+		label,
 		placeholder,
 		minLength,
 		maxLength,
@@ -21,10 +25,8 @@
 		class: className,
 	}: TextFieldProps = $props()
 
-	const id = $props.id()
-
 	const validationIssue = $derived.by(() => {
-		const valueLength = value.length
+		const valueLength = (value ?? '').length
 		if (required && valueLength < 1) {
 			return m.validationRequired()
 		}
@@ -42,29 +44,16 @@
 </script>
 
 <div class={[className, 'text-field-container']}>
-	<div
-		class="flex h-14 flex-col rounded-md border border-outline p-px text-onSurface focus-within:border-2 focus-within:border-primary focus-within:p-0 [&:has(input:user-invalid)]:border-error"
-	>
-		<input
-			bind:value
-			{name}
-			{id}
-			{type}
-			{required}
-			class="w-full grow appearance-none border-none bg-transparent px-3.5 outline-none placeholder:text-onSurfaceVariant"
-			{placeholder}
-			{@attach (input) => {
-				input.setCustomValidity(validationIssue ? ' ' : '')
-			}}
-		/>
-	</div>
-	<div class="text-field-error mt-1 hidden px-4 text-body-sm text-error">
-		{validationIssue ?? ''}
-	</div>
+	<M3TextField
+		{label}
+		{placeholder}
+		{required}
+		{type}
+		{name}
+		error={!!validationIssue}
+		bind:value
+	/>
+	{#if validationIssue}
+		<span class="m3-font-body-small text-error px-4 mt-1">{validationIssue}</span>
+	{/if}
 </div>
-
-<style>
-	.text-field-container:has(input:user-invalid) .text-field-error {
-		display: block;
-	}
-</style>

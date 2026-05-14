@@ -1,14 +1,20 @@
 <script lang="ts">
+	import iconAdd from '@ktibow/iconset-material-symbols/add'
+	import iconAlbum from '@ktibow/iconset-material-symbols/album'
+
+	import iconMusic from '@ktibow/iconset-material-symbols/music-note'
+	import iconPerson from '@ktibow/iconset-material-symbols/person'
+	import iconPlaylist from '@ktibow/iconset-material-symbols/playlist-play'
+	import iconSidePanel from '@ktibow/iconset-material-symbols/side-navigation'
 	import type { Snapshot } from '@sveltejs/kit'
+	import { Button, FAB, Icon, NavCMLX, NavCMLXItem } from 'm3-svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/state'
 	import type { RouteId } from '$app/types'
 	import AlbumsListContainer from '$lib/components/AlbumsListContainer.svelte'
 	import ArtistListContainer from '$lib/components/ArtistListContainer.svelte'
-	import Button from '$lib/components/Button.svelte'
 	import IconButton from '$lib/components/IconButton.svelte'
-	import type { IconType } from '$lib/components/icon/Icon.svelte'
-	import Icon from '$lib/components/icon/Icon.svelte'
+	import CustomIcon from '$lib/components/icon/Icon.svelte'
 	import ListDetailsLayout from '$lib/components/ListDetailsLayout.svelte'
 	import PlaylistListContainer from '$lib/components/playlists/PlaylistListContainer.svelte'
 	import TracksListContainer from '$lib/components/tracks/TracksListContainer.svelte'
@@ -31,31 +37,31 @@
 	const isHandHeldDevice = isMobile()
 
 	interface NavItem {
-		slug: typeof slug
+		slug: string
 		title: string
-		icon: IconType
+		icon: any
 	}
 
 	const navItems: NavItem[] = [
 		{
 			slug: 'tracks',
 			title: m.tracks(),
-			icon: 'musicNote',
+			icon: iconMusic,
 		},
 		{
 			slug: 'albums',
 			title: m.albums(),
-			icon: 'album',
+			icon: iconAlbum,
 		},
 		{
 			slug: 'artists',
 			title: m.artists(),
-			icon: 'person',
+			icon: iconPerson,
 		},
 		{
 			slug: 'playlists',
 			title: m.playlists(),
-			icon: 'playlist',
+			icon: iconPlaylist,
 		},
 	]
 
@@ -74,33 +80,24 @@
 	}
 </script>
 
-{#snippet navItemsSnippet(className: string)}
+{#snippet navItemsSnippet(variant: any)}
 	{#each navItems as item}
-		<Button
-			as="a"
+		<NavCMLXItem
+			{variant}
+			icon={item.icon}
+			text={item.title}
+			selected={item.slug === slug}
 			href={`/library/${item.slug}`}
-			kind="blank"
-			tooltip={item.title}
-			class={['flex shrink-0 items-center justify-center', className]}
-		>
-			<div
-				class={[
-					'flex items-center justify-center rounded-full p-2',
-					item.slug === slug && 'bg-secondaryContainer text-onSecondaryContainer',
-				]}
-			>
-				<Icon type={item.icon} />
-			</div>
-		</Button>
+		/>
 	{/each}
 {/snippet}
 
 {#snippet layoutBottom()}
 	{#if isHandHeldDevice}
-		<div
-			class="pointer-events-auto grid h-16 w-full grid-cols-[repeat(auto-fit,minmax(0,1fr))] bg-surfaceContainer sm:hidden active-view-regular:view-name-[bottom-bar]"
-		>
-			{@render navItemsSnippet('h-full')}
+		<div class="pointer-events-auto w-full active-view-regular:view-name-[bottom-bar]">
+			<NavCMLX variant="compact">
+				{@render navItemsSnippet('compact')}
+			</NavCMLX>
 		</div>
 	{/if}
 {/snippet}
@@ -112,20 +109,22 @@
 			isHandHeldDevice ? 'hidden sm:flex' : 'flex',
 		]}
 	>
-		{@render navItemsSnippet('h-14 w-20')}
+		<NavCMLX variant="compact">
+			{@render navItemsSnippet('compact')}
 
-		{#if (slug === 'albums' || slug === 'artists') && isWideLayout}
-			<IconButton
-				icon="sidePanel"
-				tooltip={main.librarySplitLayoutEnabled
-					? m.librarySplitViewDisable()
-					: m.librarySplitViewEnable()}
-				class={['mt-4', main.librarySplitLayoutEnabled && 'rotate-180']}
-				onclick={() => {
-					main.librarySplitLayoutEnabled = !main.librarySplitLayoutEnabled
-				}}
-			/>
-		{/if}
+			{#if (slug === 'albums' || slug === 'artists') && isWideLayout}
+				<div class="mt-4 flex justify-center">
+					<IconButton
+						onclick={() => {
+							main.librarySplitLayoutEnabled = !main.librarySplitLayoutEnabled
+						}}
+						class={main.librarySplitLayoutEnabled ? 'rotate-180' : ''}
+					>
+						<Icon icon={iconSidePanel} />
+					</IconButton>
+				</div>
+			{/if}
+		</NavCMLX>
 	</div>
 {/if}
 
@@ -138,13 +137,12 @@
 				{#if slug === 'playlists'}
 					<div class="mb-4 flex items-center justify-end">
 						<Button
-							kind="outlined"
+							variant="outlined"
 							onclick={() => {
 								dialogs.openDialog('newPlaylist')
 							}}
 						>
-							<Icon type="plus" />
-
+							<Icon icon={iconAdd} />
 							{m.libraryNewPlaylist()}
 						</Button>
 					</div>
@@ -154,8 +152,8 @@
 					<div class="my-auto flex flex-col items-center text-center">
 						<div class="mb-1 text-title-lg">{m.libraryEmpty()}</div>
 						{m.libraryStartByAdding()}
-						<Button as="a" href="/settings" class="mt-4">
-							<Icon type="plus" />
+						<Button href="/settings" variant="filled" class="mt-4">
+							<Icon icon={iconAdd} />
 							{m.libraryImportTracks()}
 						</Button>
 					</div>
@@ -163,7 +161,7 @@
 					<div class={['flex w-full grow flex-col']}>
 						{#if itemsIds.length === 0}
 							<div class="relative m-auto flex flex-col items-center text-center">
-								<Icon type="magnify" class="my-auto size-35 opacity-54" />
+								<CustomIcon type="magnify" class="my-auto size-35 opacity-54" />
 
 								<div class="text-body-lg">
 									{m.libraryNoResults()}
@@ -212,3 +210,9 @@
 		</div>
 	{/snippet}
 </ListDetailsLayout>
+
+<style>
+	:global(.m3-nav-cmlx-item) {
+		margin-bottom: 4px;
+	}
+</style>

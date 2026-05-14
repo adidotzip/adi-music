@@ -1,12 +1,15 @@
 <script lang="ts" module>
+	import { ListItem as M3ListItem, Icon as M3Icon } from 'm3-svelte'
 	import { createPlaylistQuery } from '$lib/library/get/value-queries.ts'
 	import { FAVORITE_PLAYLIST_ID } from '$lib/library/playlists-actions'
 	import type { Playlist } from '$lib/library/types.ts'
 	import type { IconType } from '../icon/Icon.svelte'
-	import Icon from '../icon/Icon.svelte'
-	import ListItem from '../ListItem.svelte'
+	import CustomIcon from '../icon/Icon.svelte'
 	import MenuButton from '../MenuButton.svelte'
 	import type { MenuItem } from '../menu/types.ts'
+
+	import iconFavorite from '@ktibow/iconset-material-symbols/favorite'
+	import iconPlaylist from '@ktibow/iconset-material-symbols/playlist-play'
 
 	export type MenuItemsSelector = (playlist: Playlist) => MenuItem[]
 	export type MenuItemsConfig =
@@ -36,7 +39,6 @@
 		class: className,
 		onclick,
 		icon,
-		ariaRowIndex,
 		menuItems,
 	}: Props = $props()
 
@@ -55,51 +57,41 @@
 		return () => menuItems(playlist)
 	})
 
-	const fallbackIcon = () => (playlistId === FAVORITE_PLAYLIST_ID ? 'favorite' : 'playlist')
+	const fallbackIcon = () => (playlistId === FAVORITE_PLAYLIST_ID ? iconFavorite : iconPlaylist)
 </script>
 
-<ListItem
-	{style}
-	tabindex={-1}
-	class={['h-14 text-left', active && 'bg-onSurfaceVariant/10 text-onSurfaceVariant', className]}
-	ariaLabel={`Play ${playlist?.name}`}
-	{ariaRowIndex}
-	onclick={() => {
-		invariant(playlist)
-		onclick?.(playlist)
-	}}
->
-	<div role="cell" class="track-item grow items-center gap-5">
-		{#if typeof icon === 'function'}
-			{#if playlist}
-				{@render icon(playlist)}
-			{/if}
-		{:else}
-			<div class="rounded-3xl bg-surfaceContainerHigh p-2 text-onSurfaceVariant/54">
-				<Icon type={icon ?? fallbackIcon()} />
-			</div>
-		{/if}
+<div {style} class={className}>
+	{#if data.loading}
+		<M3ListItem headline="Loading..." class="h-14" />
+	{:else if data.error}
+		<M3ListItem headline="Error loading playlist" class="h-14" />
+	{:else if playlist}
+		<M3ListItem
+			headline={playlist.name}
+			lines={1}
+			onclick={() => onclick?.(playlist)}
+			class={[
+				'transition-colors',
+				active && 'bg-primaryContainer text-onPrimaryContainer rounded-xl'
+			]}
+		>
+			{#snippet leading()}
+				{#if typeof icon === 'function'}
+					{@render icon(playlist)}
+				{:else if typeof icon === 'string'}
+					<div class="rounded-full bg-surfaceContainerHigh p-2 text-onSurfaceVariant">
+						<CustomIcon type={icon} />
+					</div>
+				{:else}
+					<div class="rounded-full bg-secondaryContainer p-2 text-onSecondaryContainer">
+						<M3Icon icon={fallbackIcon()} />
+					</div>
+				{/if}
+			{/snippet}
 
-		{#if data.loading}
-			<div>
-				<div class="h-2 rounded-xs bg-onSurface/10"></div>
-			</div>
-		{:else if data.error}
-			Error loading track
-		{:else if playlist}
-			<div class="flex flex-col truncate">
-				{playlist.name}
-			</div>
-		{/if}
-	</div>
-
-	<MenuButton tabindex={-1} menuItems={menuItemsWithItem} />
-</ListItem>
-
-<style>
-	.track-item {
-		--grid-cols: auto 1fr;
-		display: grid;
-		grid-template-columns: var(--grid-cols);
-	}
-</style>
+			{#snippet trailing()}
+				<MenuButton tabindex={-1} menuItems={menuItemsWithItem} />
+			{/snippet}
+		</M3ListItem>
+	{/if}
+</div>

@@ -3,6 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 import { defineConfig } from 'vite'
+import { functionsMixins } from 'vite-plugin-functions-mixins'
 import { imageMetadataPlugin } from './lib/vite-image-metadata.ts'
 import { logChunkSizePlugin } from './lib/vite-log-chunk-size.ts'
 
@@ -67,6 +68,7 @@ export default defineConfig({
 		plugins: () => [getAutoImportPlugin()],
 	},
 	plugins: [
+		functionsMixins({ deps: ['m3-svelte'] }),
 		imageMetadataPlugin(),
 		tailwindcss(),
 		sveltekit(),

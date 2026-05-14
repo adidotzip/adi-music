@@ -87,6 +87,43 @@ const COLOR_TOKENS_GENERATION_MAP: PaletteTokensInputMap = {
 	inversePrimary: ['a1', 80, 40],
 }
 
+const M3_COLOR_MAPPING: Record<string, PaletteToken> = {
+	primary: 'primary',
+	'on-primary': 'onPrimary',
+	'primary-container': 'primaryContainer',
+	'on-primary-container': 'onPrimaryContainer',
+	secondary: 'secondary',
+	'on-secondary': 'onSecondary',
+	'secondary-container': 'secondaryContainer',
+	'on-secondary-container': 'onSecondaryContainer',
+	tertiary: 'tertiary',
+	'on-tertiary': 'onTertiary',
+	'tertiary-container': 'tertiaryContainer',
+	'on-tertiary-container': 'onTertiaryContainer',
+	error: 'error',
+	'on-error': 'onError',
+	'error-container': 'errorContainer',
+	'on-error-container': 'onErrorContainer',
+	surface: 'surface',
+	'on-surface': 'onSurface',
+	'surface-variant': 'surfaceVariant',
+	'on-surface-variant': 'onSurfaceVariant',
+	'surface-container-highest': 'surfaceContainerHighest',
+	'surface-container-high': 'surfaceContainerHigh',
+	'surface-container': 'surfaceContainer',
+	'surface-container-low': 'surfaceContainerLow',
+	'surface-container-lowest': 'surfaceContainerLowest',
+	'surface-bright': 'surfaceBright',
+	'surface-dim': 'surfaceDim',
+	outline: 'outline',
+	'outline-variant': 'outlineVariant',
+	shadow: 'shadow',
+	scrim: 'scrim',
+	'inverse-surface': 'inverseSurface',
+	'inverse-on-surface': 'inverseOnSurface',
+	'inverse-primary': 'inversePrimary',
+}
+
 const COLOR_TOKENS_GENERATION_ENTRIES = Object.entries(COLOR_TOKENS_GENERATION_MAP) as [
 	PaletteToken,
 	PaletteTokenInput,
@@ -139,9 +176,17 @@ const clearThemeCssVariables = (): void => {
 
 const setThemeCssVariables = (argb: number, isDark: boolean): void => {
 	const palette = getThemePaletteRgbEntries(argb, isDark)
+	const paletteMap = Object.fromEntries(palette)
 
 	for (const [key, hex] of palette) {
 		document.documentElement.style.setProperty(`--color-${key}`, hex)
+	}
+
+	for (const [m3Key, paletteKey] of Object.entries(M3_COLOR_MAPPING)) {
+		const hex = paletteMap[paletteKey]
+		if (hex) {
+			document.documentElement.style.setProperty(`--m3c-${m3Key}`, hex)
+		}
 	}
 }
 

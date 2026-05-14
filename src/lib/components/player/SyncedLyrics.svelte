@@ -23,9 +23,11 @@
 </script>
 
 <script lang="ts">
+	import iconAlert from '@ktibow/iconset-material-symbols/error'
+
+	import iconMusic from '@ktibow/iconset-material-symbols/music-note'
+	import { Button, Icon } from 'm3-svelte'
 	import { spring } from 'svelte/motion'
-	import Button from '$lib/components/Button.svelte'
-	import Icon from '$lib/components/icon/Icon.svelte'
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import type { TrackData } from '$lib/library/get/value.ts'
 	import {
@@ -52,8 +54,8 @@
 
 	// ─── Motion & Physics ───────────────────────────────────────────────────
 	const scrollOffset = spring(0, {
-		stiffness: 0.08,
-		damping: 0.6, 
+		stiffness: 0.1,
+		damping: 0.7,
 	})
 
 	// ─── RAF-driven smooth time ───────────────────────────────────────────────
@@ -72,7 +74,7 @@
 	$effect(() => {
 		let running = true
 		const tick = (now: number) => {
-			if (!running) return
+			if (!running) { return }
 			if (lastRafTimestamp === undefined) {
 				lastRafTimestamp = now
 				smoothTimeMs = lastPropTime
@@ -159,7 +161,7 @@
 
 	const getActiveWordIndex = (line: any, timeMs: number): number => {
 		for (let i = line.words.length - 1; i >= 0; i -= 1) {
-			if (timeMs >= line.words[i].time) return i
+			if (timeMs >= line.words[i].time) { return i }
 		}
 		return -1
 	}
@@ -181,7 +183,7 @@
 				}
 			})
 			.catch((error: unknown) => {
-				if (error instanceof Error && error.name === 'AbortError') return
+				if (error instanceof Error && error.name === 'AbortError') { return }
 				result = { status: 'error' }
 			})
 			.finally(() => {
@@ -194,17 +196,17 @@
 	})
 
 	const updateScrollPosition = (immediate = false) => {
-		if (!containerElement || !contentElement || activeLineIndex < 0) return
+		if (!(containerElement && contentElement ) || activeLineIndex < 0) { return }
 		const activeEl = contentElement.querySelector<HTMLElement>(
 			`[data-line-index="${activeLineIndex}"]`,
 		)
-		if (!activeEl) return
+		if (!activeEl) { return }
 
 		const containerHeight = containerElement.offsetHeight
 		const lineTop = activeEl.offsetTop
 		const lineHeight = activeEl.offsetHeight
 
-		const target = (containerHeight / 2) - lineTop - (lineHeight / 2)
+		const target = (containerHeight / 3) - lineTop - (lineHeight / 2)
 
 		scrollOffset.set(target, { hard: immediate })
 	}
@@ -245,16 +247,25 @@
 	const retry = () => { reloadCount += 1 }
 </script>
 
-{#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
+{#snippet emptyState(icon: any, title: string, description: string)}
 	<div class="empty-state z-10 m-auto flex max-w-80 flex-col items-center text-center">
-		</div>
+		<Icon {icon} size={64} class="mb-4 opacity-50" />
+		<div class="text-headline-sm font-bold mb-2">{title}</div>
+		<div class="text-body-md opacity-70 mb-6">{description}</div>
+		<Button variant="tonal" onclick={retry}>Retry</Button>
+	</div>
 {/snippet}
 
-<section class={["lyrics-shell w-full h-full relative overflow-hidden bg-black", className]} aria-live="polite">
+<section class={["lyrics-shell w-full h-full relative overflow-hidden", className]} aria-live="polite">
 	{#if !track}
-		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
+		{@render emptyState(iconMusic, 'No Track', 'Play a track to see lyrics.')}
 	{:else if loading}
-		{:else if result?.status === 'found'}
+		<div class="m-auto flex flex-col items-center animate-pulse">
+			<div class="h-8 w-64 bg-white/10 rounded-full mb-4"></div>
+			<div class="h-8 w-48 bg-white/10 rounded-full mb-4"></div>
+			<div class="h-8 w-56 bg-white/10 rounded-full"></div>
+		</div>
+	{:else if result?.status === 'found'}
 		<div
 			class="lyrics-container absolute inset-0 w-full h-full"
 			role="region"
@@ -268,7 +279,7 @@
 			ontouchmove={handleTouchMove}
 		>
 			<div
-				class="lyrics-content mx-auto w-full max-w-2xl"
+				class="lyrics-content mx-auto w-full max-w-3xl"
 				bind:this={contentElement}
 				style="transform: translateY({$scrollOffset}px)"
 			>
@@ -280,9 +291,7 @@
 						<div
 							class="lyric-item lyric-break"
 							class:active={isActiveLine}
-							class:past={itemIndex < activeLineIndex}
 							data-line-index={itemIndex}
-							style="--distance: {distance}"
 						>
 							<div class="dots-container">
 								<span class="dot"></span>
@@ -295,7 +304,7 @@
 						
 						<button
 							type="button"
-							class="lyric-item lyric-line interactable"
+							class="lyric-item lyric-line"
 							class:active={isActiveLine}
 							class:past={itemIndex < activeLineIndex}
 							class:secondary-line={item.isSecondaryLine}
@@ -330,11 +339,23 @@
 				{/each}
 			</div>
 		</div>
+	{:else}
+		{@render emptyState(iconAlert, 'Lyrics Not Found', 'We couldn\'t find lyrics for this track.')}
 	{/if}
 </section>
 
 <style lang="postcss">
 	@reference "../../../app.css";
+
+	.lyrics-shell {
+		mask-image: linear-gradient(
+			to bottom,
+			transparent,
+			black 15%,
+			black 85%,
+			transparent
+		);
+	}
 
 	.lyrics-content {
 		position: absolute;
@@ -343,10 +364,10 @@
 		right: 0;
 		display: flex;
 		flex-direction: column;
-		/* Mobile-optimized padding */
-		padding: 0 1.25rem;
-		@media (min-width: 640px) { padding: 0 2rem; }
-		padding-bottom: calc(env(safe-area-inset-bottom) + 50vh);
+		padding: 0 1.5rem;
+		@media (min-width: 640px) { padding: 0 3rem; }
+		padding-top: 20vh;
+		padding-bottom: calc(env(safe-area-inset-bottom) + 60vh);
 		will-change: transform;
 	}
 
@@ -357,116 +378,97 @@
 		background: transparent;
 		border: none;
 		margin: 0;
-		padding: 1.25rem 0; 
+		padding: 1.5rem 0;
 		transform-origin: left center;
 		will-change: transform, opacity, filter;
 		
-		opacity: calc(0.25 / (1 + var(--distance) * 0.5));
-		transform: scale(calc(1 - var(--distance) * 0.05));
-		filter: blur(calc(var(--distance) * 2.5px));
+		opacity: calc(1 / (1 + var(--distance) * 1.5));
+		transform: scale(calc(1 - var(--distance) * 0.03));
+		filter: blur(calc(var(--distance) * 1.5px));
 		
 		transition:
-			opacity 0.7s cubic-bezier(0.25, 1, 0.5, 1),
-			transform 0.7s cubic-bezier(0.25, 1, 0.5, 1),
-			filter 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+			opacity 0.8s cubic-bezier(0.2, 0, 0, 1),
+			transform 0.8s cubic-bezier(0.2, 0, 0, 1),
+			filter 0.8s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.lyric-line {
-		font-family: var(--font-sans);
-		/* Mobile-first font sizing */
-		font-size: 2.15rem;
-		@media (min-width: 640px) { font-size: 2.75rem; }
-		@media (min-width: 1024px) { font-size: 3.5rem; }
-		font-weight: 800;
-		line-height: 1.15;
-		letter-spacing: -0.03em;
+		font-family: var(--m3-font);
+		font-size: 2.5rem;
+		@media (min-width: 640px) { font-size: 3.25rem; }
+		@media (min-width: 1024px) { font-size: 4rem; }
+		font-weight: 900;
+		line-height: 1.1;
+		letter-spacing: -0.04em;
 		white-space: pre-wrap;
 		color: #fff;
 		cursor: pointer;
+		filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
 	}
 
 	.lyric-item.active {
 		opacity: 1;
-		transform: scale(1);
+		transform: scale(1.05);
 		filter: blur(0);
 	}
 
-	.lyric-item.past {
-		opacity: calc(0.15 / (1 + var(--distance) * 0.75));
-	}
-
 	.lyric-line.secondary-line {
-		/* Scale down for secondary lines on mobile */
-		font-size: 1.5rem;
-		@media (min-width: 640px) { font-size: 1.75rem; }
-		@media (min-width: 1024px) { font-size: 2.5rem; }
+		font-size: 1.75rem;
+		@media (min-width: 640px) { font-size: 2.25rem; }
+		@media (min-width: 1024px) { font-size: 3rem; }
 		font-weight: 700;
-		color: rgba(255, 255, 255, 0.7);
-	}
-
-	.lyric-word.secondary-word {
-		font-size: 0.85em; 
-		color: rgba(255, 255, 255, 0.75);
+		opacity: 0.6;
 	}
 
 	.lyric-word {
 		display: inline-block;
 		position: relative;
 		margin-right: 0.15em;
+		transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.lyric-line.active .lyric-word {
 		background: linear-gradient(
 			to right,
-			#ffffff calc(var(--word-progress) - 10%),
-			rgba(255, 255, 255, 0.3) calc(var(--word-progress) + 10%)
+			#ffffff calc(var(--word-progress) - 5%),
+			rgba(255, 255, 255, 0.4) calc(var(--word-progress) + 5%)
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
 		color: transparent;
-		transition: none;
-	}
-
-	.lyric-line.active .lyric-word.secondary-word {
-		background: linear-gradient(
-			to right,
-			rgba(255, 255, 255, 0.85) calc(var(--word-progress) - 10%),
-			rgba(255, 255, 255, 0.2) calc(var(--word-progress) + 10%)
-		);
-		-webkit-background-clip: text;
-		background-clip: text;
 	}
 
 	.lyric-break {
 		display: flex;
 		align-items: center;
-		padding: 2.5rem 0;
+		padding: 3rem 0;
 	}
 
 	.dots-container {
 		display: flex;
-		gap: 0.5rem;
+		gap: 0.75rem;
 	}
 
 	.dot {
-		width: 12px;
-		height: 12px;
+		width: 16px;
+		height: 16px;
 		border-radius: 50%;
-		background-color: rgba(255, 255, 255, 0.4);
-		transition: background-color 0.3s ease;
+		background-color: rgba(255, 255, 255, 0.3);
+		transition: background-color 0.4s ease;
 	}
 
 	.lyric-break.active .dot {
-		background-color: rgba(255, 255, 255, 0.9);
-		animation: pulse-dot 1.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
+		background-color: rgba(255, 255, 255, 1);
+		animation: pulse-dot 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+		box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
 	}
 
 	.lyric-break.active .dot:nth-child(1) { animation-delay: 0s; }
-	.lyric-break.active .dot:nth-child(2) { animation-delay: 0.2s; }
-	.lyric-break.active .dot:nth-child(3) { animation-delay: 0.4s; }
+	.lyric-break.active .dot:nth-child(2) { animation-delay: 0.15s; }
+	.lyric-break.active .dot:nth-child(3) { animation-delay: 0.3s; }
 
 	@keyframes pulse-dot {
-		0%, 100% { transform: scale(1); opacity: 0.5; }
-		50% { transform: scale(1.3); opacity: 1; text-shadow: 0 0 10px white; }
+		0%, 100% { transform: scale(1); opacity: 0.4; }
+		50% { transform: scale(1.4); opacity: 1; }
 	}
 </style>

@@ -33,9 +33,15 @@ importers:
       '@biomejs/biome':
         specifier: 2.4.14
         version: 2.4.14
+      '@fontsource/m-plus-rounded-1c':
+        specifier: ^5.2.10
+        version: 5.2.10
       '@inlang/paraglide-js':
         specifier: 2.18.0
         version: 2.18.0(typescript@6.0.3)
+      '@ktibow/iconset-material-symbols':
+        specifier: ^0.0.1764827375
+        version: 0.0.1764827375
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
@@ -66,6 +72,9 @@ importers:
       knip:
         specifier: ^6.11.0
         version: 6.11.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      m3-svelte:
+        specifier: ^7.1.2
+        version: 7.1.2(svelte@5.55.5)(vite-plugin-functions-mixins@0.4.1(vite@8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3)))
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
@@ -93,6 +102,9 @@ importers:
       vite:
         specifier: 8.0.10
         version: 8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3)
+      vite-plugin-functions-mixins:
+        specifier: ^0.4.1
+        version: 0.4.1(vite@8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3))
       vitest:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@24.12.2)(happy-dom@20.9.0)(vite@8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3))
@@ -168,6 +180,12 @@ packages:
   '@emnapi/wasi-threads@1.2.1':
     resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
 
+  '@fontsource/m-plus-rounded-1c@5.2.10':
+    resolution: {integrity: sha512-PLrYoJHCBMApU8zioMT+Un6TLr6JTI7lBJWXo+t2ZNdpEn1XqZG3Y3XvNuIxdX1F3m0UqvtEbtBMHgAbTdefOw==}
+
+  '@iconify/types@2.0.0':
+    resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
+
   '@inlang/paraglide-js@2.18.0':
     resolution: {integrity: sha512-Acp6htA5W7rS2kL3iMjhSr08eECz696MYsud+FBKrmahzM7PdywPVq9UOr9MaC/aV7AZPElrYcqYZOOlUri5fg==}
     hasBin: true
@@ -199,6 +217,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@ktibow/iconset-material-symbols@0.0.1764827375':
+    resolution: {integrity: sha512-D5r08cbHpLn+G2G03Zj3nV0afQpS/IV4kD0g7rDHpU4k7tC/CUt6+PbddKISTWz8u+SRPQNaR5cZU0e9IlUoWg==}
 
   '@lix-js/sdk@0.4.10':
     resolution: {integrity: sha512-0dMInAJK/67guTG5rRZaCEhvzC5cCXENOjaePA5AqMXrCE97kaY7SRor9e2vnoGsFIiGqXKlT0MCIoZj36G0gg==}
@@ -1141,6 +1162,18 @@ packages:
   locate-character@3.0.0:
     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}
 
+  m3-svelte@7.1.2:
+    resolution: {integrity: sha512-Em8NPhHcPoiwbeyqa5xGzBl9wvoM0jVtHpj74YvgWgX29lH1QcTy253kXuG8VawurNYuw/AtpVVuRqQ22DWhig==}
+    peerDependencies:
+      '@ktibow/material-color-utilities-nightly': ^0.4.1768930731000
+      svelte: ^5.40.0
+      vite-plugin-functions-mixins: ^0.4.1
+    peerDependenciesMeta:
+      '@ktibow/material-color-utilities-nightly':
+        optional: true
+      vite-plugin-functions-mixins:
+        optional: true
+
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -1430,6 +1463,11 @@ packages:
     resolution: {integrity: sha512-Qo+uWgilfSmAhXCMav1uYFynlQO7fMFiMVZsQqZRMIXp0O7rR7qjkj+cPvBHLgBqi960QCoo/PH2/6ZtVqKvrg==}
     hasBin: true
 
+  vite-plugin-functions-mixins@0.4.1:
+    resolution: {integrity: sha512-xl9wCfeEvJls+5wnEa76xQ3nrnNOw1Zm9C4mc49dQrHTXRNTV3mwOsFILGxRsjOCm6mJwp3TfjIDFbyFPppe1g==}
+    peerDependencies:
+      vite: ^7.2.4
+
   vite@8.0.10:
     resolution: {integrity: sha512-rZuUu9j6J5uotLDs+cAA4O5H4K1SfPliUlQwqa6YEwSrWDZzP4rhm00oJR5snMewjxF5V/K3D4kctsUTsIU9Mw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -1622,6 +1660,10 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@fontsource/m-plus-rounded-1c@5.2.10': {}
+
+  '@iconify/types@2.0.0': {}
+
   '@inlang/paraglide-js@2.18.0(typescript@6.0.3)':
     dependencies:
       '@inlang/recommend-sherlock': 0.2.1
@@ -1668,6 +1710,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@ktibow/iconset-material-symbols@0.0.1764827375':
+    dependencies:
+      '@iconify/types': 2.0.0
 
   '@lix-js/sdk@0.4.10':
     dependencies:
@@ -2343,6 +2389,14 @@ snapshots:
 
   locate-character@3.0.0: {}
 
+  m3-svelte@7.1.2(svelte@5.55.5)(vite-plugin-functions-mixins@0.4.1(vite@8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3))):
+    dependencies:
+      '@iconify/types': 2.0.0
+      '@ktibow/iconset-material-symbols': 0.0.1764827375
+      svelte: 5.55.5
+    optionalDependencies:
+      vite-plugin-functions-mixins: 0.4.1(vite@8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3))
+
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -2649,6 +2703,10 @@ snapshots:
   urlpattern-polyfill@10.1.0: {}
 
   uuid@14.0.0: {}
+
+  vite-plugin-functions-mixins@0.4.1(vite@8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3)):
+    dependencies:
+      vite: 8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3)
 
   vite@8.0.10(@types/node@24.12.2)(jiti@2.6.1)(yaml@2.8.3):
     dependencies:

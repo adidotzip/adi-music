@@ -1,11 +1,16 @@
 <script lang="ts">
+	import iconTrayRemove from '@ktibow/iconset-material-symbols/delete-sweep'
+	import iconEqualizer from '@ktibow/iconset-material-symbols/equalizer'
+
+	import iconMusic from '@ktibow/iconset-material-symbols/music-note'
+	import iconTrayFull from '@ktibow/iconset-material-symbols/view-list'
+	import { Button, Card, Icon, Tabs } from 'm3-svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/state'
 	import BackButton from '$lib/components/BackButton.svelte'
-	import Button from '$lib/components/Button.svelte'
 	import Header from '$lib/components/Header.svelte'
-	import IconButton from '$lib/components/IconButton.svelte'
-	import Icon from '$lib/components/icon/Icon.svelte'
+	import CustomIconButton from '$lib/components/IconButton.svelte'
+	import CustomIcon from '$lib/components/icon/Icon.svelte'
 	import ListDetailsLayout from '$lib/components/ListDetailsLayout.svelte'
 	import ActiveIndicator from '$lib/components/player/buttons/ActiveIndicator.svelte'
 	import PlayerFavoriteButton from '$lib/components/player/buttons/PlayerFavoriteButton.svelte'
@@ -19,7 +24,6 @@
 	import Timeline from '$lib/components/player/Timeline.svelte'
 	import ScrollContainer from '$lib/components/ScrollContainer.svelte'
 	import Slider from '$lib/components/Slider.svelte'
-	import Tabs from '$lib/components/Tabs.svelte'
 	import TracksListContainer from '$lib/components/tracks/TracksListContainer.svelte'
 	import { initPageQueries } from '$lib/db/query/page-query.svelte.js'
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
@@ -35,18 +39,11 @@
 	const dialogs = useDialogsStore()
 	const activeTrack = $derived(player.activeTrack)
 
-	const selectedDetailsTab = $derived.by(() => {
-		if (page.route.id === '/(app)/player/history') {
-			return 1
-		}
-
-		if (page.route.id === '/(app)/player/lyrics') {
-			return 2
-		}
-
-		return 0
+	const selectedDetailsTabId = $derived.by(() => {
+		if (page.route.id === '/(app)/player/history') { return 'history' }
+		if (page.route.id === '/(app)/player/lyrics') { return 'lyrics' }
+		return 'queue'
 	})
-	const isSelectedTabQueue = $derived(selectedDetailsTab === 0)
 
 	const { isCompactHorizontal, isCompactVertical, layoutMode } = $derived(
 		getLayoutProps(page.route.id),
@@ -58,7 +55,7 @@
 		class={[
 			layoutMode === 'both' && 'w-100 2xl:w-[28dvw]',
 			layoutMode === 'list' && 'mx-auto w-full',
-			'player-content z-0 grow items-center gap-x-6 overflow-clip bg-secondaryContainerVariant px-2 pb-2',
+			'player-content z-0 grow items-center gap-x-6 overflow-clip bg-secondaryContainer px-4 pb-4',
 			isCompactVertical && !isCompactHorizontal && 'player-content-horizontal',
 		]}
 	>
@@ -69,111 +66,87 @@
 			]}
 		>
 			<BackButton />
-
-			<div class="text-title-lg">{m.player()}</div>
-
+			<div class="text-headline-sm font-bold">{m.player()}</div>
 			<div class="w-10"></div>
 		</div>
 
-		<PlayerArtwork
-			class="m-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary [grid-area:artwork] active-view-player:view-name-[pl-artwork]"
-		/>
+		<div class="m-auto my-auto flex size-full items-center justify-center [grid-area:artwork]">
+			<PlayerArtwork
+				class="size-full max-h-80 max-w-80 rounded-3xl shadow-4 active-view-player:view-name-[pl-artwork]"
+			/>
+		</div>
 
-		<div class="mt-2 flex w-full flex-col gap-2 [grid-area:controls]">
-			<div class="w-full rounded-2xl bg-surfaceContainerHighest px-4 py-2">
+		<div class="mt-4 flex w-full flex-col gap-4 [grid-area:controls]">
+			<Card variant="filled" class="w-full bg-surfaceContainerHighest px-4 py-4 rounded-3xl">
 				<Timeline class="w-full" />
-			</div>
+			</Card>
 
-			<div
-				class={[
-					'flex w-full flex-col gap-6 rounded-2xl bg-secondaryContainer px-4 [grid-area:header]',
-					mainStore.volumeSliderEnabled ? 'pt-8 pb-4' : 'py-8',
-				]}
-			>
+			<Card variant="filled" class="flex w-full flex-col gap-6 bg-secondaryContainer px-4 py-8 rounded-3xl">
 				<div class="my-auto flex items-center justify-between gap-2">
 					<ShuffleButton />
-
 					<PlayPrevButton />
-
 					<PlayTogglePillButton />
-
 					<PlayNextButton />
-
 					<RepeatButton />
 				</div>
 
 				{#if mainStore.volumeSliderEnabled}
-					<div class="flex items-center gap-2">
-						<IconButton
-							icon="volumeMid"
-							tooltip={m.playerDecreaseVolume()}
-							onclick={() => (player.volume -= 10)}
-						/>
-
+					<div class="flex items-center gap-4">
 						<Slider bind:value={player.volume} />
-
-						<IconButton
-							icon="volumeHigh"
-							tooltip={m.playerIncreaseVolume()}
-							onclick={() => (player.volume += 10)}
-						/>
 					</div>
 				{/if}
-			</div>
+			</Card>
 
-			<div class="flex h-18 w-full shrink-0 items-center rounded-2xl bg-secondaryContainer px-4">
+			<Card variant="filled" class="flex h-20 w-full shrink-0 items-center bg-secondaryContainer px-4 rounded-3xl">
 				{#if activeTrack}
-					<div class="mr-2 min-w-6 text-center text-body-lg tabular-nums">
+					<div class="mr-4 min-w-6 text-center text-title-md opacity-50 tabular-nums">
 						{player.activeTrackIndex + 1}
 					</div>
 
 					<div class="grid overflow-hidden" lang={getItemLanguage(activeTrack.language)}>
-						<div class="truncate text-body-lg">{activeTrack.name}</div>
-						<div class="truncate text-body-md">{formatArtists(activeTrack.artists)}</div>
+						<div class="truncate text-title-md font-bold">{activeTrack.name}</div>
+						<div class="truncate text-body-md opacity-70">{formatArtists(activeTrack.artists)}</div>
 					</div>
 				{/if}
 
 				<div class="ml-auto flex gap-1">
 					<PlayerFavoriteButton />
 
-					<IconButton
+					<CustomIconButton
 						tooltip={m.equalizerOpenEqualizer()}
 						onclick={() => {
 							dialogs.openDialog('equalizer')
 						}}
 					>
-						<Icon type="equalizer" />
-
+						<Icon icon={iconEqualizer} />
 						<ActiveIndicator active={player.equalizer.enabled} />
-					</IconButton>
+					</CustomIconButton>
 
 					{#if layoutMode === 'list'}
-						<IconButton tooltip={m.playerOpenLyrics()} icon="musicNote" as="a" href="/player/lyrics" />
-
-						<IconButton tooltip={m.playerOpenQueue()} icon="trayFull" as="a" href="/player/queue" />
+						<CustomIconButton tooltip={m.playerOpenLyrics()} href="/player/lyrics">
+							<Icon icon={iconMusic} />
+						</CustomIconButton>
+						<CustomIconButton tooltip={m.playerOpenQueue()} href="/player/queue">
+							<Icon icon={iconTrayFull} />
+						</CustomIconButton>
 					{/if}
 				</div>
-			</div>
+			</Card>
 		</div>
 	</div>
 {/snippet}
 
 {#snippet emptyList(title: string)}
 	<div class="m-auto flex flex-col items-center text-center">
-		<Icon type="playlistMusic" class="color-onSecondaryContainer my-auto size-35 opacity-54" />
-
-		<div class="mb-4 text-body-lg">{title}</div>
-		<Button kind="outlined" as="a" href="/library/tracks">
+		<CustomIcon type="playlistMusic" class="color-onSecondaryContainer my-auto size-35 opacity-54" />
+		<div class="mb-4 text-headline-sm font-bold">{title}</div>
+		<Button variant="outlined" href="/library/tracks">
 			{m.playerQueuePlaySomething()}
 		</Button>
 	</div>
 {/snippet}
 
 {#snippet queueSnippet()}
-	<!--
-		For view transition to work correctly we need to clip the captured element size
-		so we can't use root scroller here.
-	-->
 	<ScrollContainer
 		class="flex h-dvh scroll-pt-(--app-header-height) flex-col overflow-auto contain-strict scrollbar-gutter-stable"
 	>
@@ -181,44 +154,42 @@
 			mode="sticky"
 			noBackButton={layoutMode !== 'details'}
 			class={(isElevated) => [
-				'border-b',
-				isElevated ? 'border-transparent' : 'border-onSecondaryContainer/24',
+				'border-b transition-colors',
+				isElevated ? 'bg-surface/80 backdrop-blur-md border-outline-variant' : 'border-transparent',
 			]}
 		>
-			<div class="absolute inset-0 m-auto size-max">
+			<div class="absolute inset-0 m-auto flex size-max items-center justify-center">
 				<Tabs
-					selectedIndex={selectedDetailsTab}
+					tab={selectedDetailsTabId}
 					items={[
-						{ id: 'queue', text: m.queue() },
-						{ id: 'history', text: m.playerHistory() },
-						{ id: 'lyrics', text: m.lyrics() },
+						{ value: 'queue', name: m.queue() },
+						{ value: 'history', name: m.playerHistory() },
+						{ value: 'lyrics', name: m.lyrics() },
 					]}
-					onchange={(item) => {
-						void goto(`/player/${item.id}`, { replaceState: true })
+					onchange={(id) => {
+						void goto(`/player/${id}`, { replaceState: true })
 					}}
-				>
-					{#snippet text(item)}
-						{item.text}
-					{/snippet}
-				</Tabs>
+				/>
 			</div>
 
 			{#if page.route.id === '/(app)/player/lyrics'}
 				<div class="w-11"></div>
-			{:else if isSelectedTabQueue}
-				<IconButton
+			{:else if selectedDetailsTabId === 'queue'}
+				<CustomIconButton
 					tooltip={m.playerClearQueue()}
 					disabled={player.isQueueEmpty}
-					icon="trayRemove"
 					onclick={player.clearQueue}
-				/>
+				>
+					<Icon icon={iconTrayRemove} />
+				</CustomIconButton>
 			{:else}
-				<IconButton
+				<CustomIconButton
 					tooltip={m.playerClearHistory()}
 					disabled={data.historyTrackIds.value.length === 0}
-					icon="trayRemove"
 					onclick={() => void clearPlayHistory()}
-				/>
+				>
+					<Icon icon={iconTrayRemove} />
+				</CustomIconButton>
 			{/if}
 		</Header>
 
@@ -226,7 +197,7 @@
 			<div class={["flex grow", page.route.id !== '/(app)/player/lyrics' && "p-4"]}>
 				{#if page.route.id === '/(app)/player/lyrics'}
 					<SyncedLyrics track={activeTrack} currentTimeMs={player.currentTime * 1000} />
-				{:else if isSelectedTabQueue}
+				{:else if selectedDetailsTabId === 'queue'}
 					{#if player.isQueueEmpty}
 						{@render emptyList(m.playerQueueEmpty())}
 					{:else}
@@ -287,7 +258,7 @@
 	mode={layoutMode}
 	class={[
 		'grow active-view-player:view-name-[pl-card]',
-		layoutMode === 'both' && 'bg-secondaryContainer',
+		layoutMode === 'both' && 'bg-surface',
 	]}
 	list={playerSnippet}
 	details={queueSnippet}
@@ -358,7 +329,7 @@
 
 		&::view-transition-group(pl-card) {
 			overflow: clip;
-			background: var(--color-secondaryContainer);
+			background: var(--m3c-secondary-container);
 			top: 0;
 			left: 0;
 			transform: none;

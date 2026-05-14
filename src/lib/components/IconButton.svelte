@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	import Button, { type AllowedButtonElement, type ButtonProps } from './Button.svelte'
+	import type { AllowedButtonElement, ButtonProps } from './Button.svelte'
 	import Icon, { type IconType } from './icon/Icon.svelte'
 
 	interface IconButtonProps<As extends AllowedButtonElement> extends ButtonProps<As> {
@@ -10,21 +10,20 @@
 </script>
 
 <script lang="ts" generics="As extends AllowedButtonElement = 'button'">
-	const { icon, children, ...rest }: IconButtonProps<As> = $props()
+	import { Button as M3Button } from 'm3-svelte'
+	const { icon, children, tooltip, ...rest }: IconButtonProps<As> = $props()
 </script>
 
-<Button
+<M3Button
 	{...rest}
-	kind="blank"
-	class={[
-		'flex size-11 shrink-0 items-center justify-center rounded-full',
-		rest.class,
-		rest.disabled && 'opacity-54',
-	]}
+	variant="text"
+	iconType="full"
+	class={rest.class}
+	aria-label={tooltip}
 >
 	{#if children}
 		{@render children()}
 	{:else if icon}
 		<Icon type={icon} />
 	{/if}
-</Button>
+</M3Button>
