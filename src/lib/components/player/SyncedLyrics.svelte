@@ -1,7 +1,6 @@
 <script lang="ts" module>
 	import type { SyncedLyricsLine } from '$lib/lyrics/synced-lyrics.ts'
 
-	// Define our unified item type for the scrolling list
 	type LyricItem = 
 		| (SyncedLyricsLine & { type: 'line'; isSecondaryLine: boolean; words: any[] })
 		| { type: 'break'; startTime: number; endTime: number; id: string };
@@ -51,9 +50,10 @@
 	let userScrollTimeout: ReturnType<typeof setTimeout>
 
 	// ─── Motion & Physics ───────────────────────────────────────────────────
+	// Lower stiffness and higher damping for a silkier, heavier scroll feel
 	const scrollOffset = spring(0, {
-		stiffness: 0.08,
-		damping: 0.6, 
+		stiffness: 0.04,
+		damping: 0.75, 
 	})
 
 	// ─── RAF-driven smooth time ───────────────────────────────────────────────
@@ -104,7 +104,6 @@
 		for (let i = 0; i < lines.length; i += 1) {
 			const line = lines[i]
 
-			// Inject 3-dots break if gap is > 3.5 seconds
 			if (i > 0) {
 				const prevLine = lines[i - 1]
 				const gap = line.startTime - prevLine.endTime
@@ -118,7 +117,6 @@
 				}
 			}
 
-			// Parse secondary words inside ()
 			let inSecondary = false
 			const words = line.words.map((word) => {
 				let isWordSecondary = inSecondary
@@ -133,15 +131,13 @@
 				return { ...word, isSecondary: isWordSecondary }
 			})
 			
-			// Detect if the whole line is secondary before stripping brackets
 			const lineText = words.map((w) => w.string).join('').trim()
 			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
 
-			// Strip out the parentheses for the final display
 			const cleanedWords = words.map((word) => {
 				return {
 					...word,
-					string: word.string.replace(/[()]/g, '') // Removes '(' and ')'
+					string: word.string.replace(/[()]/g, '')
 				}
 			})
 			
@@ -204,6 +200,7 @@
 		const lineTop = activeEl.offsetTop
 		const lineHeight = activeEl.offsetHeight
 
+		// Center the active line perfectly
 		const target = (containerHeight / 2) - lineTop - (lineHeight / 2)
 
 		scrollOffset.set(target, { hard: immediate })
@@ -224,9 +221,10 @@
 	const handleUserInteraction = () => {
 		isUserScrolling = true
 		clearTimeout(userScrollTimeout)
+		// Wait a bit longer before snapping back so it doesn't fight the user
 		userScrollTimeout = setTimeout(() => {
 			isUserScrolling = false
-		}, 4000)
+		}, 3000)
 	}
 
 	let lastTouchY = 0
@@ -246,17 +244,23 @@
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
-	<div class="empty-state z-10 m-auto flex max-w-80 flex-col items-center text-center">
-		</div>
+	<div class="empty-state z-10 m-auto flex h-full max-w-80 flex-col items-center justify-center text-center opacity-50 transition-opacity duration-500">
+		<Icon name={icon} class="mb-4 h-12 w-12 text-white/40" />
+		<h3 class="text-xl font-bold text-white">{title}</h3>
+		<p class="mt-2 text-sm text-white/60">{description}</p>
+	</div>
 {/snippet}
 
 <section class={["lyrics-shell w-full h-full relative overflow-hidden bg-black", className]} aria-live="polite">
 	{#if !track}
-		{@render emptyState('musicNote', 'No Track', 'Play a track to see lyrics.')}
+		{@render emptyState('musicNote', 'No Track Playing', 'Play a track to follow along with the lyrics.')}
 	{:else if loading}
-		{:else if result?.status === 'found'}
+		<div class="flex h-full w-full items-center justify-center">
+			<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-white/50"></div>
+		</div>
+	{:else if result?.status === 'found'}
 		<div
-			class="lyrics-container absolute inset-0 w-full h-full"
+			class="lyrics-container absolute inset-0 h-full w-full"
 			role="region"
 			aria-label="Lyrics"
 			bind:this={containerElement}
@@ -330,11 +334,31 @@
 				{/each}
 			</div>
 		</div>
+	{:else}
+		{@render emptyState('alertCircle', 'Lyrics Unavailable', "We couldn't find synced lyrics for this track.")}
 	{/if}
 </section>
 
 <style lang="postcss">
 	@reference "../../../app.css";
+
+	.lyrics-container {
+		/* Creates a premium fade-out effect at the top and bottom of the scrolling list */
+		mask-image: linear-gradient(
+			to bottom,
+			transparent 0%,
+			black 10%,
+			black 85%,
+			transparent 100%
+		);
+		-webkit-mask-image: linear-gradient(
+			to bottom,
+			transparent 0%,
+			black 10%,
+			black 85%,
+			transparent 100%
+		);
+	}
 
 	.lyrics-content {
 		position: absolute;
@@ -343,10 +367,10 @@
 		right: 0;
 		display: flex;
 		flex-direction: column;
-		/* Mobile-optimized padding */
-		padding: 0 1.25rem;
+		padding: 0 1.5rem;
 		@media (min-width: 640px) { padding: 0 2rem; }
-		padding-bottom: calc(env(safe-area-inset-bottom) + 50vh);
+		padding-bottom: calc(env(safe-area-inset-bottom) + 60vh);
+		padding-top: 50vh; /* Gives space to scroll to the very top line smoothly */
 		will-change: transform;
 	}
 
@@ -361,65 +385,78 @@
 		transform-origin: left center;
 		will-change: transform, opacity, filter;
 		
-		opacity: calc(0.25 / (1 + var(--distance) * 0.5));
-		transform: scale(calc(1 - var(--distance) * 0.05));
-		filter: blur(calc(var(--distance) * 2.5px));
+		/* Softer depth of field curve */
+		opacity: clamp(0.1, calc(0.4 / (1 + var(--distance) * 0.4)), 1);
+		transform: scale(calc(1 - var(--distance) * 0.03));
+		filter: blur(calc(var(--distance) * 1.5px));
 		
+		/* Butter-smooth out-expo easing */
 		transition:
-			opacity 0.7s cubic-bezier(0.25, 1, 0.5, 1),
-			transform 0.7s cubic-bezier(0.25, 1, 0.5, 1),
-			filter 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+			opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+			transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+			filter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
 	}
 
 	.lyric-line {
 		font-family: var(--font-sans);
-		/* Mobile-first font sizing */
 		font-size: 2.15rem;
 		@media (min-width: 640px) { font-size: 2.75rem; }
 		@media (min-width: 1024px) { font-size: 3.5rem; }
 		font-weight: 800;
-		line-height: 1.15;
-		letter-spacing: -0.03em;
+		line-height: 1.2;
+		letter-spacing: -0.02em;
 		white-space: pre-wrap;
 		color: #fff;
 		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.lyric-item:hover {
+		opacity: clamp(0.5, calc(0.6 / (1 + var(--distance) * 0.3)), 1);
 	}
 
 	.lyric-item.active {
 		opacity: 1;
-		transform: scale(1);
+		transform: scale(1.02); /* Slight pop for the active line */
 		filter: blur(0);
+		text-shadow: 0 4px 24px rgba(255, 255, 255, 0.15); /* Soft glow behind active text */
 	}
 
 	.lyric-item.past {
-		opacity: calc(0.15 / (1 + var(--distance) * 0.75));
+		/* Dim past lines slightly more than future lines to guide the eye downward */
+		opacity: clamp(0.05, calc(0.2 / (1 + var(--distance) * 0.6)), 1);
 	}
 
 	.lyric-line.secondary-line {
-		/* Scale down for secondary lines on mobile */
 		font-size: 1.5rem;
-		@media (min-width: 640px) { font-size: 1.75rem; }
+		@media (min-width: 640px) { font-size: 1.85rem; }
 		@media (min-width: 1024px) { font-size: 2.5rem; }
-		font-weight: 700;
-		color: rgba(255, 255, 255, 0.7);
+		font-weight: 600;
+		font-style: italic;
+		color: rgba(255, 255, 255, 0.6);
 	}
 
 	.lyric-word.secondary-word {
-		font-size: 0.85em; 
-		color: rgba(255, 255, 255, 0.75);
+		font-size: 0.9em; 
+		color: rgba(255, 255, 255, 0.6);
+		font-style: italic;
 	}
 
 	.lyric-word {
 		display: inline-block;
 		position: relative;
 		margin-right: 0.15em;
+		/* Ensures gradient fills work correctly if a long word wraps to the next line */
+		-webkit-box-decoration-break: clone;
+		box-decoration-break: clone;
 	}
 
 	.lyric-line.active .lyric-word {
+		/* Softer leading edge on the karaoke fill so it doesn't look pixelated */
 		background: linear-gradient(
 			to right,
-			#ffffff calc(var(--word-progress) - 10%),
-			rgba(255, 255, 255, 0.3) calc(var(--word-progress) + 10%)
+			#ffffff var(--word-progress),
+			rgba(255, 255, 255, 0.25) calc(var(--word-progress) + 15%)
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -430,8 +467,8 @@
 	.lyric-line.active .lyric-word.secondary-word {
 		background: linear-gradient(
 			to right,
-			rgba(255, 255, 255, 0.85) calc(var(--word-progress) - 10%),
-			rgba(255, 255, 255, 0.2) calc(var(--word-progress) + 10%)
+			rgba(255, 255, 255, 0.85) var(--word-progress),
+			rgba(255, 255, 255, 0.15) calc(var(--word-progress) + 15%)
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -440,33 +477,33 @@
 	.lyric-break {
 		display: flex;
 		align-items: center;
-		padding: 2.5rem 0;
+		padding: 3rem 0;
 	}
 
 	.dots-container {
 		display: flex;
-		gap: 0.5rem;
+		gap: 0.75rem;
 	}
 
 	.dot {
-		width: 12px;
-		height: 12px;
+		width: 10px;
+		height: 10px;
 		border-radius: 50%;
-		background-color: rgba(255, 255, 255, 0.4);
-		transition: background-color 0.3s ease;
+		background-color: rgba(255, 255, 255, 0.2);
+		transition: background-color 0.4s ease, transform 0.4s ease;
 	}
 
 	.lyric-break.active .dot {
-		background-color: rgba(255, 255, 255, 0.9);
-		animation: pulse-dot 1.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
+		background-color: rgba(255, 255, 255, 0.8);
+		animation: pulse-dot 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
 	}
 
 	.lyric-break.active .dot:nth-child(1) { animation-delay: 0s; }
-	.lyric-break.active .dot:nth-child(2) { animation-delay: 0.2s; }
-	.lyric-break.active .dot:nth-child(3) { animation-delay: 0.4s; }
+	.lyric-break.active .dot:nth-child(2) { animation-delay: 0.15s; }
+	.lyric-break.active .dot:nth-child(3) { animation-delay: 0.3s; }
 
 	@keyframes pulse-dot {
-		0%, 100% { transform: scale(1); opacity: 0.5; }
-		50% { transform: scale(1.3); opacity: 1; text-shadow: 0 0 10px white; }
+		0%, 100% { transform: scale(1); opacity: 0.4; }
+		50% { transform: scale(1.4); opacity: 1; box-shadow: 0 0 12px rgba(255, 255, 255, 0.4); }
 	}
 </style>
