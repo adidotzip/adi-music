@@ -12,7 +12,9 @@
 	): number => {
 		let index = -1
 		for (let i = 0; i < items.length; i += 1) {
-			if (currentTimeMs >= items[i].startTime) {
+			const item = items[i]
+			if (!item) continue
+			if (currentTimeMs >= item.startTime) {
 				index = i
 			} else {
 				break
@@ -24,9 +26,6 @@
 
 <script lang="ts">
 	import { spring } from 'svelte/motion'
-	import Button from '$lib/components/Button.svelte'
-	import Icon from '$lib/components/icon/Icon.svelte'
-	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import type { TrackData } from '$lib/library/get/value.ts'
 	import {
 		fetchSyncedLyrics,
@@ -103,18 +102,21 @@
 		
 		for (let i = 0; i < lines.length; i += 1) {
 			const line = lines[i]
+			if (!line) continue
 
 			// Inject 3-dots break if gap is > 3.5 seconds
 			if (i > 0) {
 				const prevLine = lines[i - 1]
-				const gap = line.startTime - prevLine.endTime
-				if (gap > 3500) {
-					items.push({
-						type: 'break',
-						startTime: prevLine.endTime,
-						endTime: line.startTime,
-						id: `break-${i}`
-					})
+				if (prevLine) {
+					const gap = line.startTime - prevLine.endTime
+					if (gap > 3500) {
+						items.push({
+							type: 'break',
+							startTime: prevLine.endTime,
+							endTime: line.startTime,
+							id: `break-${i}`
+						})
+					}
 				}
 			}
 
@@ -147,10 +149,11 @@
 			
 			items.push({ 
 				type: 'line', 
-				...line, 
+				startTime: line.startTime,
+				endTime: line.endTime,
 				words: cleanedWords, 
-				isSecondaryLine 
-			})
+				isSecondaryLine,
+			} as LyricItem)
 		}
 		return items
 	})
@@ -231,18 +234,22 @@
 
 	let lastTouchY = 0
 	const handleTouchStart = (e: TouchEvent) => {
-		lastTouchY = e.touches[0].clientY
+		const touch = e.touches[0]
+		if (touch) {
+			lastTouchY = touch.clientY
+		}
 		handleUserInteraction()
 	}
 
 	const handleTouchMove = (e: TouchEvent) => {
-		const touchY = e.touches[0].clientY
-		const deltaY = lastTouchY - touchY
-		lastTouchY = touchY
-		scrollOffset.update(v => v - deltaY, { hard: true })
+		const touch = e.touches[0]
+		if (touch) {
+			const touchY = touch.clientY
+			const deltaY = lastTouchY - touchY
+			lastTouchY = touchY
+			scrollOffset.update(v => v - deltaY, { hard: true })
+		}
 	}
-
-	const retry = () => { reloadCount += 1 }
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}

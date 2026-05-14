@@ -18,6 +18,7 @@
 	import { FAVORITE_PLAYLIST_ID } from '$lib/library/playlists-actions.ts'
 	import { getPlaylistMenuItems } from '$lib/menu-actions/playlists.ts'
 	import Search from './Search.svelte'
+	import { NavCMLX, NavCMLXItem } from 'm3-svelte'
 
 	const { data, children } = $props()
 
@@ -74,33 +75,26 @@
 	}
 </script>
 
-{#snippet navItemsSnippet(className: string)}
+{#snippet navItemsSnippet(variant: "compact" | "medium" | "large" | "extra-large" | "auto")}
 	{#each navItems as item}
-		<Button
-			as="a"
+		<NavCMLXItem
+			{variant}
+			icon={item.icon}
+			text={item.title}
+			selected={item.slug === slug}
 			href={`/library/${item.slug}`}
-			kind="blank"
-			tooltip={item.title}
-			class={['flex shrink-0 items-center justify-center', className]}
-		>
-			<div
-				class={[
-					'flex items-center justify-center rounded-full p-2',
-					item.slug === slug && 'bg-secondaryContainer text-onSecondaryContainer',
-				]}
-			>
-				<Icon type={item.icon} />
-			</div>
-		</Button>
+		/>
 	{/each}
 {/snippet}
 
 {#snippet layoutBottom()}
 	{#if isHandHeldDevice}
 		<div
-			class="pointer-events-auto grid h-16 w-full grid-cols-[repeat(auto-fit,minmax(0,1fr))] bg-surfaceContainer sm:hidden active-view-regular:view-name-[bottom-bar]"
+			class="pointer-events-auto h-20 w-full sm:hidden active-view-regular:view-name-[bottom-bar]"
 		>
-			{@render navItemsSnippet('h-full')}
+			<NavCMLX variant="compact">
+				{@render navItemsSnippet('compact')}
+			</NavCMLX>
 		</div>
 	{/if}
 {/snippet}
@@ -108,24 +102,26 @@
 {#if layoutMode !== 'details'}
 	<div
 		class={[
-			'desktop-sidebar fixed z-1 mt-20 h-max w-max flex-col items-center gap-2 [@media(max-height:500px)]:mt-2',
+			'desktop-sidebar fixed z-1 mt-20 h-max w-20 flex-col items-center gap-2 [@media(max-height:500px)]:mt-2',
 			isHandHeldDevice ? 'hidden sm:flex' : 'flex',
 		]}
 	>
-		{@render navItemsSnippet('h-14 w-20')}
+		<NavCMLX variant="compact">
+			{@render navItemsSnippet('compact')}
 
-		{#if (slug === 'albums' || slug === 'artists') && isWideLayout}
-			<IconButton
-				icon="sidePanel"
-				tooltip={main.librarySplitLayoutEnabled
-					? m.librarySplitViewDisable()
-					: m.librarySplitViewEnable()}
-				class={['mt-4', main.librarySplitLayoutEnabled && 'rotate-180']}
-				onclick={() => {
-					main.librarySplitLayoutEnabled = !main.librarySplitLayoutEnabled
-				}}
-			/>
-		{/if}
+			{#if (slug === 'albums' || slug === 'artists') && isWideLayout}
+				<NavCMLXItem
+					variant="compact"
+					icon="sidePanel"
+					text={m.librarySplitViewEnable()}
+					selected={false}
+					onclick={() => {
+						main.librarySplitLayoutEnabled = !main.librarySplitLayoutEnabled
+					}}
+					class={main.librarySplitLayoutEnabled ? 'rotate-180' : ''}
+				/>
+			{/if}
+		</NavCMLX>
 	</div>
 {/if}
 

@@ -189,8 +189,8 @@ export const parseLrc = (
 
 			return matches.map((match) => ({
 				startTime: parseTimestamp(
-					match[1],
-					match[2],
+					match[1] ?? '0',
+					match[2] ?? '0',
 					match[3] as string | undefined,
 				),
 				text,
@@ -347,7 +347,7 @@ const scoreLrclibSearchResult = (
 	)
 
 	const expectedAlbumName = normalizeSearchText(
-		formatNameOrUnknown(track.album, ''),
+		formatNameOrUnknown(track.album, '') as string,
 	)
 
 	const resultTrackName = normalizeSearchText(
@@ -443,15 +443,16 @@ const getLyricsPlusLines = (
 					.split(whitespacePattern)
 					.filter(Boolean)
 
-				const totalDuration = line.duration
+				const lineRecord = line as { time: number; duration: number }
+				const totalDuration = lineRecord.duration
 
 				const wordDuration =
 					totalDuration /
 					(wordsList.length || 1)
 
 				return {
-					startTime: line.time,
-					endTime: line.time + line.duration,
+					startTime: lineRecord.time,
+					endTime: lineRecord.time + lineRecord.duration,
 
 					words: wordsList.map((word, i) => ({
 						string:
@@ -461,7 +462,7 @@ const getLyricsPlusLines = (
 								: ' '),
 
 						time: Math.round(
-							line.time + i * wordDuration,
+							lineRecord.time + i * wordDuration,
 						),
 					})),
 				}
@@ -566,7 +567,7 @@ const fetchLrclibExactLyrics = async (
 
 	url.searchParams.set(
 		'album_name',
-		formatNameOrUnknown(track.album, ''),
+		formatNameOrUnknown(track.album, '') as string,
 	)
 
 	url.searchParams.set(

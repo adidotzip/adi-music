@@ -87,7 +87,7 @@
 	<div class="px-4 pt-4 text-title-sm text-onSurfaceVariant">{text}</div>
 {/snippet}
 
-<section class="card settings-max-width mx-auto w-full overflow-clip">
+<section class="settings-max-width mx-auto w-full overflow-clip rounded-2xl bg-surfaceContainer">
 	<div class="flex flex-col p-4">
 		<div class="flex items-center gap-2 text-title-sm">
 			{m.settingsDirectories()}
@@ -114,7 +114,7 @@
 
 <InstallAppBanner class="settings-max-width mt-6" />
 
-<section class="card settings-max-width mx-auto mt-6 w-full text-body-lg">
+<section class="settings-max-width mx-auto mt-6 w-full text-body-lg rounded-2xl bg-surfaceContainer overflow-clip">
 	{@render heading(m.settingsAppearance())}
 
 	<div class="flex items-center justify-between p-4">
@@ -201,7 +201,7 @@
 	</div>
 </section>
 
-<section class="card settings-max-width mx-auto mt-6 w-full text-body-lg">
+<section class="settings-max-width mx-auto mt-6 w-full text-body-lg rounded-2xl bg-surfaceContainer overflow-clip">
 	{@render heading(m.player())}
 
 	{#if supportsChangingAudioVolume()}
@@ -287,7 +287,7 @@
 	</div>
 </section>
 
-<section class="card settings-max-width mx-auto mt-6 w-full text-body-lg">
+<section class="settings-max-width mx-auto mt-6 w-full text-body-lg rounded-2xl bg-surfaceContainer overflow-clip">
 	<div class="flex items-center justify-between p-4">
 		<div>{m.settingsLanguage()}</div>
 
@@ -301,7 +301,7 @@
 	</div>
 </section>
 
-<section class="card settings-max-width mx-auto mt-6 w-full text-body-lg">
+<section class="settings-max-width mx-auto mt-6 w-full text-body-lg rounded-2xl bg-surfaceContainer overflow-clip">
 	<div class="flex items-center justify-between p-4">
 		<div>{m.about()}</div>
 

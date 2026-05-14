@@ -1,54 +1,36 @@
-<script lang="ts" module>
-	import { ripple } from '$lib/attachments/ripple.ts'
-</script>
-
 <script lang="ts">
+	import { ListItem as M3ListItem } from 'm3-svelte'
+
 	interface Props {
-		style?: string
-		class?: ClassValue
-		ariaLabel: string
-		ariaRowIndex: number
-		tabindex: number
-		children: Snippet
-		onclick?: (e: KeyboardEvent | MouseEvent) => void
-		onpointerenter?: (e: PointerEvent) => void
-		oncontextmenu?: (e: MouseEvent) => void
+		headline: string
+		supporting?: string
+		leading?: Snippet
+		trailing?: Snippet
+		onclick?: () => void
+		href?: string
+		class?: string
+		disabled?: boolean
 	}
 
-	const {
-		children,
-		class: className,
-		style,
-		ariaLabel,
-		ariaRowIndex,
-		tabindex = 0,
+	let {
+		headline,
+		supporting,
+		leading,
+		trailing,
 		onclick,
-		oncontextmenu,
-		onpointerenter,
+		href,
+		class: className,
+		disabled,
 	}: Props = $props()
-
-	const clickHandler = (e: KeyboardEvent | MouseEvent) => onclick?.(e)
 </script>
 
-<div
-	{@attach ripple()}
-	{style}
-	{tabindex}
-	class={[
-		className,
-		'flex cursor-pointer items-center overflow-hidden rounded-lg pr-2 pl-4 -outline-offset-2 contain-content hover:bg-onSurface/10',
-	]}
-	role="row"
-	aria-label={ariaLabel}
-	aria-rowindex={ariaRowIndex}
-	onclick={clickHandler}
-	{onpointerenter}
-	onkeydown={(e) => {
-		if (e.key === 'Enter') {
-			clickHandler(e)
-		}
-	}}
-	{oncontextmenu}
->
-	{@render children()}
-</div>
+<M3ListItem
+	{headline}
+	{supporting}
+	{leading}
+	{trailing}
+	{onclick}
+	{href}
+	class={className}
+	{disabled}
+/>

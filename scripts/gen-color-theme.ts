@@ -10,11 +10,17 @@ const outputFile = `${import.meta.dirname}/../src/theme-colors.css`
 
 const argb = argbFromHex(defaultColorSeed)
 
+const camelToKebab = (str: string) => str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+
 const tokensLightEntries = getThemePaletteRgbEntries(argb, false)
 const tokensDark = Object.fromEntries(getThemePaletteRgbEntries(argb, true))
 
 const variables = tokensLightEntries
-	.map(([name, lightValue]) => `--color-${name}: light-dark(${lightValue}, ${tokensDark[name]});`)
+	.map(([name, lightValue]) => {
+		const kebabName = camelToKebab(name)
+		const darkValue = tokensDark[name]
+		return `--color-${name}: light-dark(${lightValue}, ${darkValue});\n	--m3c-${kebabName}: light-dark(${lightValue}, ${darkValue});`
+	})
 	.join('\n	')
 
 const content = `/* This file is auto generated, do not edit manually. */

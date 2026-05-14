@@ -1,27 +1,8 @@
-<script module lang="ts">
-	import { ripple } from '../attachments/ripple.ts'
-	import { tooltip } from '../attachments/tooltip.ts'
+<script lang="ts" module>
+	import { Button as M3Button } from 'm3-svelte'
+	import type { AllowedButtonElement, ButtonProps } from './Button.svelte'
 
-	export type AllowedButtonElement = 'button' | 'a'
-	export type ButtonKind = 'filled' | 'toned' | 'outlined' | 'flat' | 'blank'
-
-	export type ButtonHref<As extends AllowedButtonElement> = As extends 'a' ? string : never
-
-	export interface ButtonProps<As extends AllowedButtonElement> {
-		as?: As
-		kind?: ButtonKind
-		type?: 'button' | 'submit' | 'reset'
-		target?: string
-		disabled?: boolean
-		href?: ButtonHref<As>
-		class?: ClassValue
-		tabindex?: number
-		ariaLabel?: string
-		tooltip?: string
-		children?: Snippet
-		onclick?: (event: MouseEvent) => void
-		onpointerdown?: (event: PointerEvent) => void
-	}
+	export type { AllowedButtonElement, ButtonProps }
 </script>
 
 <script lang="ts" generics="As extends AllowedButtonElement = 'button'">
@@ -29,74 +10,38 @@
 		as = 'button' as As,
 		kind = 'filled',
 		disabled = false,
-		// svelte-ignore state_referenced_locally possible false positive?
-		href = (as === 'a' ? '' : undefined) as ButtonHref<As>,
+		href,
 		type = 'button',
 		children,
 		ariaLabel,
-		tooltip: tooltipMessage,
+		tooltip,
+		onclick,
+		onpointerdown,
 		...restProps
 	}: ButtonProps<As> = $props()
 
-	const KIND_CLASS_MAP = {
-		filled: 'filled-button',
-		toned: 'tonal-button',
-		outlined: 'outlined-button',
-		flat: 'flat-button',
-		blank: '',
+	const KIND_MAP = {
+		filled: 'filled',
+		toned: 'tonal',
+		outlined: 'outlined',
+		flat: 'text',
+		blank: 'text',
 	} as const
+
+	const variant = KIND_MAP[kind]
 </script>
 
-<svelte:element
-	this={(disabled ? 'button' : as) as AllowedButtonElement}
-	{@attach ripple({ stopPropagation: true })}
-	{@attach tooltip(tooltipMessage)}
-	{...restProps}
+<M3Button
+	{variant}
+	{disabled}
 	{type}
-	aria-label={ariaLabel}
 	{href}
-	disabled={disabled === true ? true : undefined}
-	class={[
-		'interactable',
-		KIND_CLASS_MAP[kind],
-		kind !== 'blank' &&
-			'base-button flex h-10 items-center justify-center gap-2 rounded-3xl px-6 text-label-lg transition-[outline-width] duration-150',
-		restProps.class,
-	]}
+	{onclick}
+	{onpointerdown}
+	aria-label={ariaLabel}
+	{...restProps}
 >
 	{#if children}
 		{@render children()}
 	{/if}
-</svelte:element>
-
-<style lang="postcss">
-	@reference '../../app.css';
-
-	.filled-button {
-		background: var(--color-primary);
-		color: var(--color-onPrimary);
-	}
-
-	.tonal-button {
-		background: var(--color-secondaryContainer);
-		color: var(--color-onSecondaryContainer);
-	}
-
-	.outlined-button {
-		color: var(--color-primary);
-		border: 1px solid var(--color-outline);
-	}
-
-	.flat-button {
-		color: var(--color-primary);
-		padding-left: --spacing(3);
-		padding-right: --spacing(3);
-	}
-
-	.base-button[disabled] {
-		cursor: default;
-		background-color: --alpha(var(--color-onSurface) / 12%);
-		border-color: --alpha(var(--color-onSurface) / 38%);
-		color: --alpha(var(--color-onSurface) / 38%);
-	}
-</style>
+</M3Button>

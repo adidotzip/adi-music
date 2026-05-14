@@ -1,6 +1,8 @@
 <script lang="ts" module>
-	import Button, { type AllowedButtonElement, type ButtonProps } from './Button.svelte'
-	import Icon, { type IconType } from './icon/Icon.svelte'
+	import { Button as M3Button } from 'm3-svelte'
+	import type { IconType } from './icon/Icon.svelte'
+	import Icon from './icon/Icon.svelte'
+	import type { AllowedButtonElement, ButtonProps } from './Button.svelte'
 
 	interface IconButtonProps<As extends AllowedButtonElement> extends ButtonProps<As> {
 		tooltip: string
@@ -10,21 +12,28 @@
 </script>
 
 <script lang="ts" generics="As extends AllowedButtonElement = 'button'">
-	const { icon, children, ...rest }: IconButtonProps<As> = $props()
+	const { icon, children, tooltip, ...rest }: IconButtonProps<As> = $props()
+
+	const KIND_MAP = {
+		filled: 'filled',
+		toned: 'tonal',
+		outlined: 'outlined',
+		flat: 'text',
+		blank: 'text',
+	} as const
+
+	const variant = KIND_MAP[rest.kind ?? 'blank']
 </script>
 
-<Button
+<M3Button
+	{variant}
+	iconType="full"
 	{...rest}
-	kind="blank"
-	class={[
-		'flex size-11 shrink-0 items-center justify-center rounded-full',
-		rest.class,
-		rest.disabled && 'opacity-54',
-	]}
+	title={tooltip}
 >
 	{#if children}
 		{@render children()}
 	{:else if icon}
 		<Icon type={icon} />
 	{/if}
-</Button>
+</M3Button>

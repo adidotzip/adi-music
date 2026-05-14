@@ -4,6 +4,8 @@
 /* We don't use these classes */
 @source not inline('container');
 
+@import '@fontsource/m-plus-rounded-1c/index.css';
+
 /* latin */
 @font-face {
 	font-family: 'Heebo';
@@ -82,13 +84,15 @@
 	--ease-incoming80: cubic-bezier(0, 0, 0.2, 1);
 	--ease-incoming80outgoing40: cubic-bezier(0.4, 0, 0.2, 1);
 
-	--font-sans: 'Heebo', 'App CJK Fallback', system-ui, 'Noto Color Emoji', sans-serif;
+	--font-sans: 'M PLUS Rounded 1c', 'App CJK Fallback', system-ui, 'Noto Color Emoji', sans-serif;
+	--m3-font: var(--font-sans);
 	--text-*: initial;
 }
 
 html {
-	background-color: var(--color-surface);
-	color: var(--color-onSurface);
+	@apply --m3-body-medium;
+	background-color: var(--m3c-surface);
+	color: var(--m3c-on-surface);
 	font-family: var(--font-sans);
 	font-optical-sizing: auto;
 	color-scheme: light;
@@ -257,87 +261,51 @@ source {
 }
 
 @utility text-headline-lg {
-	font-size: --spacing(8);
-	line-height: --spacing(10);
-	letter-spacing: 0;
-	font-weight: 700;
+	@apply --m3-headline-large;
 }
 
 @utility text-headline-md {
-	font-size: --spacing(7);
-	line-height: --spacing(9);
-	letter-spacing: 0;
-	font-weight: 400;
+	@apply --m3-headline-medium;
 }
 
 @utility text-headline-sm {
-	font-size: --spacing(6);
-	line-height: --spacing(8);
-	letter-spacing: 0;
-	font-weight: 400;
+	@apply --m3-headline-small;
 }
 
 @utility text-title-lg {
-	font-size: --spacing(5.5);
-	line-height: --spacing(7);
-	letter-spacing: 0;
-	font-weight: 500;
+	@apply --m3-title-large;
 }
 
 @utility text-title-md {
-	font-size: --spacing(4);
-	line-height: --spacing(6);
-	letter-spacing: 0.15px;
-	font-weight: 500;
+	@apply --m3-title-medium;
 }
 
 @utility text-title-sm {
-	font-size: --spacing(3.5);
-	line-height: --spacing(5);
-	letter-spacing: 0.1px;
-	font-weight: 500;
+	@apply --m3-title-small;
 }
 
 @utility text-label-lg {
-	font-size: --spacing(3.5);
-	line-height: --spacing(5);
-	letter-spacing: 0.1px;
-	font-weight: 500;
+	@apply --m3-label-large;
 }
 
 @utility text-label-md {
-	font-size: 12px;
-	line-height: --spacing(4);
-	letter-spacing: 0.5px;
-	font-weight: 500;
+	@apply --m3-label-medium;
 }
 
 @utility text-label-sm {
-	font-size: 11px;
-	line-height: --spacing(4);
-	letter-spacing: 0.5px;
-	font-weight: 500;
+	@apply --m3-label-small;
 }
 
 @utility text-body-lg {
-	font-size: --spacing(4);
-	line-height: --spacing(6);
-	letter-spacing: 0.15px;
-	font-weight: 400;
+	@apply --m3-body-large;
 }
 
 @utility text-body-md {
-	font-size: --spacing(3.5);
-	line-height: --spacing(5);
-	letter-spacing: 0.25px;
-	font-weight: 400;
+	@apply --m3-body-medium;
 }
 
 @utility text-body-sm {
-	font-size: --spacing(3);
-	line-height: --spacing(4);
-	letter-spacing: 0.4px;
-	font-weight: 400;
+	@apply --m3-body-small;
 }
 
 @utility view-name-* {

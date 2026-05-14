@@ -134,14 +134,18 @@ export const getThemePaletteRgbEntries = (argb: number, isDark: boolean): ThemeE
 const clearThemeCssVariables = (): void => {
 	for (const [key] of COLOR_TOKENS_GENERATION_ENTRIES) {
 		document.documentElement.style.removeProperty(`--color-${key}`)
+		document.documentElement.style.removeProperty(`--m3c-${camelToKebab(key)}`)
 	}
 }
+
+const camelToKebab = (str: string) => str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
 
 const setThemeCssVariables = (argb: number, isDark: boolean): void => {
 	const palette = getThemePaletteRgbEntries(argb, isDark)
 
 	for (const [key, hex] of palette) {
 		document.documentElement.style.setProperty(`--color-${key}`, hex)
+		document.documentElement.style.setProperty(`--m3c-${camelToKebab(key)}`, hex)
 	}
 }
 
