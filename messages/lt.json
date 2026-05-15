@@ -1,6 +1,7 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"about": "Apie",
+	"aboutForkOf": "{link} atšaka",
 	"aboutHomepage": "Namai",
 	"aboutPrivacy": "Privatumas",
 	"aboutSourceCode": "Programos kodas",

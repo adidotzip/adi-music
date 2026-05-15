@@ -1,6 +1,7 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"about": "關於",
+	"aboutForkOf": "{link} 的分支",
 	"aboutHomepage": "首頁",
 	"aboutPrivacy": "隱私",
 	"aboutSourceCode": "原始碼",

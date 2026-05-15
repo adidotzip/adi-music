@@ -49,7 +49,8 @@ export const getArtistArtwork = async (artist: string): Promise<string | undefin
 					const data = (await response.json()) as { results: { artworkUrl100?: string }[] }
 					if (data.results && data.results.length > 0 && data.results[0].artworkUrl100) {
 						// Upgrade image size from 100x100 to 600x600
-						const url = data.results[0].artworkUrl100.replace('100x100bb.jpg', '600x600bb.jpg')
+						// Using regex to handle different dimensions and suffixes
+						const url = data.results[0].artworkUrl100.replace(/\/\d+x\d+/, '/600x600')
 						localStorage.setItem(key, url)
 						return url
 					}

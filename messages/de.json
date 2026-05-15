@@ -1,6 +1,7 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"about": "Über",
+	"aboutForkOf": "Fork von {link}",
 	"aboutHomepage": "Webseite",
 	"aboutPrivacy": "Privatsphäre",
 	"aboutSourceCode": "Quellcode",
