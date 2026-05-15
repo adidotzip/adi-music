@@ -25,7 +25,7 @@
 	import { spring } from 'svelte/motion'
 	import Button from '$lib/components/Button.svelte'
 	import Icon from '$lib/components/icon/Icon.svelte'
-	import Spinner from '$lib/components/Spinner.svelte' // <-- Imported Spinner component
+	import Spinner from '$lib/components/Spinner.svelte'
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import type { TrackData } from '$lib/library/get/value.ts'
 	import {
@@ -51,7 +51,6 @@
 	let userScrollTimeout: ReturnType<typeof setTimeout>
 
 	// ─── Motion & Physics ───────────────────────────────────────────────────
-	// Lower stiffness and higher damping for a silkier, heavier scroll feel
 	const scrollOffset = spring(0, {
 		stiffness: 0.04,
 		damping: 0.75, 
@@ -135,10 +134,12 @@
 			const lineText = words.map((w) => w.string).join('').trim()
 			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
 
-			const cleanedWords = words.map((word) => {
+			// Inject originalIndex so we can split them structurally later without breaking timing checks
+			const cleanedWords = words.map((word, idx) => {
 				return {
 					...word,
-					string: word.string.replace(/[()]/g, '')
+					string: word.string.replace(/[()]/g, ''),
+					originalIndex: idx
 				}
 			})
 			
@@ -201,9 +202,7 @@
 		const lineTop = activeEl.offsetTop
 		const lineHeight = activeEl.offsetHeight
 
-		// Center the active line perfectly
 		const target = (containerHeight / 2) - lineTop - (lineHeight / 2)
-
 		scrollOffset.set(target, { hard: immediate })
 	}
 
@@ -222,7 +221,6 @@
 	const handleUserInteraction = () => {
 		isUserScrolling = true
 		clearTimeout(userScrollTimeout)
-		// Wait a bit longer before snapping back so it doesn't fight the user
 		userScrollTimeout = setTimeout(() => {
 			isUserScrolling = false
 		}, 3000)
@@ -257,7 +255,6 @@
 		{@render emptyState('musicNote', 'No Track Playing', 'Play a track to follow along with the lyrics.')}
 	{:else if loading}
 		<div class="flex h-full w-full items-center justify-center">
-			<!-- Replaced old CSS spinner with the imported Spinner component -->
 			<Spinner class="h-8 w-8 text-white/50" />
 		</div>
 	{:else if result?.status === 'found'}
@@ -300,7 +297,9 @@
 						</div>
 					{:else}
 						{@const activeWordIdx = isActiveLine ? getActiveWordIndex(item, smoothTimeMs) : -1}
-						
+						{@const primaryWords = item.words.filter(w => !w.isSecondary)}
+						{@const secondaryWords = item.words.filter(w => w.isSecondary)}
+
 						<button
 							type="button"
 							class="lyric-item lyric-line interactable"
@@ -315,24 +314,51 @@
 								updateScrollPosition()
 							}}
 						>
-							{#each item.words as word, wordIndex}
-								{#if word.string.trim().length > 0}
-									{@const isPastWord = isActiveLine && wordIndex < activeWordIdx}
-									{@const isCurrentWord = isActiveLine && wordIndex === activeWordIdx}
-									{@const nextTime = item.words[wordIndex + 1]?.time ?? item.endTime}
-									{@const duration = Math.max(nextTime - word.time, 1)}
-									{@const wordProgress = isCurrentWord
-										? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
-										: isPastWord ? 100 : 0}
+							<!-- Main lyrics block -->
+							{#if primaryWords.length > 0}
+								<div class="primary-lyrics-block">
+									{#each primaryWords as word}
+										{#if word.string.trim().length > 0}
+											{@const isPastWord = isActiveLine && word.originalIndex < activeWordIdx}
+											{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}
+											{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}
+											{@const duration = Math.max(nextTime - word.time, 1)}
+											{@const wordProgress = isCurrentWord
+												? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
+												: isPastWord ? 100 : 0}
 
-									<span
-										class="lyric-word"
-										class:past-word={isPastWord}
-										class:secondary-word={word.isSecondary}
-										style="--word-progress: {wordProgress}%"
-									>{word.string}</span>
-								{/if}
-							{/each}
+											<span
+												class="lyric-word"
+												class:is-sung={isPastWord || isCurrentWord}
+												style="--word-progress: {wordProgress}%"
+											>{word.string}</span>
+										{/if}
+									{/each}
+								</div>
+							{/if}
+
+							<!-- Secondary lyrics block (forced safely below main lyrics) -->
+							{#if secondaryWords.length > 0}
+								<div class="secondary-lyrics-block">
+									{#each secondaryWords as word}
+										{#if word.string.trim().length > 0}
+											{@const isPastWord = isActiveLine && word.originalIndex < activeWordIdx}
+											{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}
+											{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}
+											{@const duration = Math.max(nextTime - word.time, 1)}
+											{@const wordProgress = isCurrentWord
+												? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
+												: isPastWord ? 100 : 0}
+
+											<span
+												class="lyric-word secondary-word"
+												class:is-sung={isPastWord || isCurrentWord}
+												style="--word-progress: {wordProgress}%"
+											>{word.string}</span>
+										{/if}
+									{/each}
+								</div>
+							{/if}
 						</button>
 					{/if}
 				{/each}
@@ -347,7 +373,6 @@
 	@reference "../../../app.css";
 
 	.lyrics-container {
-		/* Creates a premium fade-out effect at the top and bottom of the scrolling list */
 		mask-image: linear-gradient(
 			to bottom,
 			transparent 0%,
@@ -374,7 +399,7 @@
 		padding: 0 1.5rem;
 		@media (min-width: 640px) { padding: 0 2rem; }
 		padding-bottom: calc(env(safe-area-inset-bottom) + 60vh);
-		padding-top: 50vh; /* Gives space to scroll to the very top line smoothly */
+		padding-top: 50vh; 
 		will-change: transform;
 	}
 
@@ -389,12 +414,10 @@
 		transform-origin: left center;
 		will-change: transform, opacity, filter;
 		
-		/* Softer depth of field curve */
 		opacity: clamp(0.1, calc(0.4 / (1 + var(--distance) * 0.4)), 1);
 		transform: scale(calc(1 - var(--distance) * 0.03));
 		filter: blur(calc(var(--distance) * 1.5px));
 		
-		/* Butter-smooth out-expo easing */
 		transition:
 			opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
 			transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -421,13 +444,24 @@
 
 	.lyric-item.active {
 		opacity: 1;
-		transform: scale(1.02); /* Slight pop for the active line */
+		transform: scale(1.02);
 		filter: blur(0);
 	}
 
 	.lyric-item.past {
-		/* Dim past lines slightly more than future lines to guide the eye downward */
 		opacity: clamp(0.05, calc(0.2 / (1 + var(--distance) * 0.6)), 1);
+	}
+
+	/* Layout blocks for keeping secondary below main */
+	.primary-lyrics-block {
+		display: block;
+		width: 100%;
+	}
+
+	.secondary-lyrics-block {
+		display: block;
+		width: 100%;
+		margin-top: 0.15em;
 	}
 
 	.lyric-line.secondary-line {
@@ -440,7 +474,7 @@
 	}
 
 	.lyric-word.secondary-word {
-		font-size: 0.9em; 
+		font-size: 0.85em; 
 		color: rgba(255, 255, 255, 0.6);
 		font-style: italic;
 	}
@@ -449,29 +483,39 @@
 		display: inline-block;
 		position: relative;
 		margin-right: 0.15em;
-		/* Ensures gradient fills work correctly if a long word wraps to the next line */
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
+		/* Slight pop up animation setup */
+		transform: translateY(0);
+		transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	/* Moves words slightly up when sung */
+	.lyric-line.active .lyric-word.is-sung {
+		transform: translateY(-4px);
 	}
 
 	.lyric-line.active .lyric-word {
-		/* Softer leading edge on the karaoke fill so it doesn't look pixelated */
+		/* Professional fade: tight 5% margin to prevent white spills */
 		background: linear-gradient(
 			to right,
+			#ffffff 0%,
 			#ffffff var(--word-progress),
-			rgba(255, 255, 255, 0.25) calc(var(--word-progress) + 15%)
+			rgba(255, 255, 255, 0.3) calc(var(--word-progress) + 5%),
+			rgba(255, 255, 255, 0.3) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
 		color: transparent;
-		transition: none;
 	}
 
 	.lyric-line.active .lyric-word.secondary-word {
 		background: linear-gradient(
 			to right,
+			rgba(255, 255, 255, 0.85) 0%,
 			rgba(255, 255, 255, 0.85) var(--word-progress),
-			rgba(255, 255, 255, 0.15) calc(var(--word-progress) + 15%)
+			rgba(255, 255, 255, 0.15) calc(var(--word-progress) + 5%),
+			rgba(255, 255, 255, 0.15) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -492,12 +536,15 @@
 		width: 10px;
 		height: 10px;
 		border-radius: 50%;
-		background-color: rgba(255, 255, 255, 0.2);
-		transition: background-color 0.4s ease, transform 0.4s ease;
+		background-color: rgba(255, 255, 255, 0.15);
+		/* Bouncy easing for smooth 3 dots */
+		transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+		transform: scale(1);
 	}
 
 	.dot.filled {
-		background-color: rgba(255, 255, 255, 0.9);
-		transform: scale(1.3);
+		background-color: #ffffff;
+		transform: scale(1.5);
+		box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 	}
 </style>
