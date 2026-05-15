@@ -50,4 +50,10 @@
 			</li>
 		{/each}
 	</ul>
+
+	<div class="mt-8 text-center text-body-medium text-onSurfaceVariant">
+		{@html m.aboutForkOf({
+			link: '<a href="https://snaeplayer.com" class="text-primary hover:underline" target="_blank" rel="noopener">Snae Player</a>',
+		})}
+	</div>
 </section>

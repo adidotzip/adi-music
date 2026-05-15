@@ -5,7 +5,7 @@ import {
 } from '@material/material-color-utilities'
 import { getThemePaletteRgbEntries } from '../src/lib/theme.ts'
 
-const defaultColorSeed = '#780606'
+const defaultColorSeed = '#d34539'
 const outputFile = `${import.meta.dirname}/../src/theme-colors.css`
 
 const argb = argbFromHex(defaultColorSeed)
