@@ -176,8 +176,18 @@ export class PlayerStore {
 			}
 		}
 
-		audio.onplay = syncPlayingFromAudio
-		audio.onpause = syncPlayingFromAudio
+		audio.onplay = () => {
+			syncPlayingFromAudio()
+			this.#updatePositionState()
+		}
+		audio.onpause = () => {
+			syncPlayingFromAudio()
+			this.#updatePositionState()
+		}
+
+		audio.onseeked = () => {
+			this.#updatePositionState()
+		}
 
 		audio.onended = () => {
 			if (this.repeat === 'one') {
@@ -204,6 +214,7 @@ export class PlayerStore {
 
 		audio.ondurationchange = () => {
 			this.duration = audio.duration
+			this.#updatePositionState()
 		}
 
 		audio.ontimeupdate = throttle(() => {
@@ -242,42 +253,73 @@ export class PlayerStore {
 			audio.muted = this.muted
 		})
 
-		const ms = window.navigator.mediaSession
+		const ms = typeof window !== 'undefined' ? window.navigator.mediaSession : undefined
 
-		$effect(() => {
-			const track = this.activeTrack
-			if (!track) {
-				ms.metadata = null
-				return
-			}
-
-			const fallbackArtworkSrc = new URL('/artwork.svg', location.origin).toString()
-			ms.metadata = new MediaMetadata({
-				title: track.name,
-				artist: formatArtists(track.artists),
-				album: track.album,
-				artwork: [
-					{
-						src: this.artworkSrc ?? fallbackArtworkSrc,
-						sizes: '512x512',
-					},
-				],
+		if (ms) {
+			$effect(() => {
+				ms.playbackState = this.playing ? 'playing' : 'paused'
 			})
-		})
 
-		// Done for minification purposes.
-		const setAction = ms.setActionHandler.bind(ms)
-		setAction('play', () => this.togglePlay(true))
-		setAction('pause', () => this.togglePlay(false))
-		setAction('previoustrack', this.playPrev)
-		setAction('nexttrack', this.playNext)
-		setAction('seekbackward', () => {
-			audio.currentTime = Math.max(audio.currentTime - 10, 0)
+			$effect(() => {
+				const track = this.activeTrack
+				if (!track) {
+					ms.metadata = null
+					return
+				}
+
+				const fallbackArtworkSrc = new URL('/artwork.svg', location.origin).toString()
+				const artworkSrc = this.artworkSrc ?? fallbackArtworkSrc
+
+				ms.metadata = new MediaMetadata({
+					title: track.name,
+					artist: formatArtists(track.artists),
+					album: track.album,
+					artwork: [
+						{ src: artworkSrc, sizes: '96x96' },
+						{ src: artworkSrc, sizes: '128x128' },
+						{ src: artworkSrc, sizes: '192x192' },
+						{ src: artworkSrc, sizes: '256x256' },
+						{ src: artworkSrc, sizes: '384x384' },
+						{ src: artworkSrc, sizes: '512x512' },
+					],
+				})
+			})
+
+			// Done for minification purposes.
+			const setAction = ms.setActionHandler.bind(ms)
+			setAction('play', () => this.togglePlay(true))
+			setAction('pause', () => this.togglePlay(false))
+			setAction('previoustrack', this.playPrev)
+			setAction('nexttrack', this.playNext)
+			setAction('stop', () => {
+				this.togglePlay(false)
+				this.seek(0)
+			})
+			setAction('seekbackward', (details) => {
+				audio.currentTime = Math.max(audio.currentTime - (details?.seekOffset ?? 10), 0)
+			})
+			setAction('seekforward', (details) => {
+				audio.currentTime = Math.min(audio.currentTime + (details?.seekOffset ?? 10), audio.duration)
+			})
+			setAction('seekto', (details) => {
+				if (details.seekTime !== undefined) {
+					this.seek(details.seekTime)
+				}
+			})
+		}
+	}
+
+	#updatePositionState = (): void => {
+		const ms = typeof window !== 'undefined' ? window.navigator.mediaSession : undefined
+		if (!ms?.setPositionState || !Number.isFinite(this.#audio.duration)) {
+			return
+		}
+
+		ms.setPositionState({
+			duration: this.#audio.duration,
+			playbackRate: this.#audio.playbackRate,
+			position: this.#audio.currentTime,
 		})
-		setAction('seekforward', () => {
-			audio.currentTime = Math.min(audio.currentTime + 10, audio.duration)
-		})
-		// seekto is handled by AudioElement default behavior
 	}
 
 	#savePlayHistory = (trackId: number): void => {
@@ -334,6 +376,7 @@ export class PlayerStore {
 	seek = (time: number): void => {
 		this.currentTime = time
 		this.#audio.currentTime = time
+		this.#updatePositionState()
 	}
 
 	toggleRepeat = (): void => {
