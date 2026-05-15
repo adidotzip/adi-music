@@ -25,6 +25,7 @@
 	import { spring } from 'svelte/motion'
 	import Button from '$lib/components/Button.svelte'
 	import Icon from '$lib/components/icon/Icon.svelte'
+	import Spinner from '$lib/components/Spinner.svelte' // <-- Imported Spinner component
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import type { TrackData } from '$lib/library/get/value.ts'
 	import {
@@ -256,7 +257,8 @@
 		{@render emptyState('musicNote', 'No Track Playing', 'Play a track to follow along with the lyrics.')}
 	{:else if loading}
 		<div class="flex h-full w-full items-center justify-center">
-			<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-white/50"></div>
+			<!-- Replaced old CSS spinner with the imported Spinner component -->
+			<Spinner class="h-8 w-8 text-white/50" />
 		</div>
 	{:else if result?.status === 'found'}
 		<div
