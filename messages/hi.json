@@ -1,6 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "about": "जानकारी",
+  "aboutForkOf": "{link} का फोर्क",
   "aboutHomepage": "मुखपृष्ठ",
   "aboutPrivacy": "गोपनीयता",
   "aboutSourceCode": "सोर्स कोड",
