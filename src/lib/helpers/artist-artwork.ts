@@ -1,7 +1,10 @@
 import { UNKNOWN_ITEM } from '$lib/library/types.ts'
 import { SerialQueue } from './serial-queue.ts'
 
-const getStorageKey = (artist: string) => `snaeplayer-artist-artwork.${artist}`
+const getStorageKey = (artist: string) =>
+	`snaeplayer-artist-artwork.${artist}`
+
+const NONE_CACHE_DURATION = 1000 * 60 * 30 
 
 const queue = new SerialQueue()
 const pendingRequests = new Map<string, Promise<string | undefined>>()
@@ -18,40 +21,74 @@ type DeezerSearchResponse = {
 	data: DeezerArtist[]
 }
 
-// Helper to safely interact with localStorage
-const safeSetStorage = (key: string, value: string) => {
+type CachedArtwork =
+	| {
+			type: 'image'
+			value: string
+			timestamp: number
+	  }
+	| {
+			type: 'none'
+			timestamp: number
+	  }
+
+
+const safeSetStorage = (key: string, value: CachedArtwork) => {
 	try {
-		localStorage.setItem(key, value)
+		localStorage.setItem(key, JSON.stringify(value))
 	} catch (error) {
-		console.warn(`[Storage Warning] Could not cache artwork for ${key}`, error)
+		console.warn(
+			`[Storage Warning] Could not cache artwork for ${key}`,
+			error,
+		)
 	}
 }
 
-const safeGetStorage = (key: string): string | null => {
+const safeGetStorage = (key: string): CachedArtwork | null => {
 	try {
-		return localStorage.getItem(key)
-	} catch (error) {
+		const value = localStorage.getItem(key)
+
+		if (!value) {
+			return null
+		}
+
+		return JSON.parse(value) as CachedArtwork
+	} catch {
 		return null
 	}
 }
+// Main Function
 
 export const getArtistArtwork = async (
 	artist: string,
 ): Promise<string | undefined> => {
-	if (artist === UNKNOWN_ITEM) {
+	if (!artist || artist === UNKNOWN_ITEM) {
 		return undefined
 	}
 
 	const key = getStorageKey(artist)
 
-	// Check cache safely
+
 	const cached = safeGetStorage(key)
+
 	if (cached) {
-		return cached === 'none' ? undefined : cached
+		// Cached image
+		if (cached.type === 'image') {
+			return cached.value
+		}
+
+		
+		if (
+			cached.type === 'none' &&
+			Date.now() - cached.timestamp < NONE_CACHE_DURATION
+		) {
+			return undefined
+		}
 	}
 
-	// Prevent duplicate requests
+
 	const pending = pendingRequests.get(artist)
+
 	if (pending) {
 		return pending
 	}
@@ -59,34 +96,98 @@ export const getArtistArtwork = async (
 	const request = (async () => {
 		try {
 			return await queue.enqueue(async () => {
-				// Re-check cache safely while waiting in queue
-				const cached = safeGetStorage(key)
-				if (cached) {
-					return cached === 'none' ? undefined : cached
+		
+				const queuedCache = safeGetStorage(key)
+
+				if (queuedCache) {
+					if (queuedCache.type === 'image') {
+						return queuedCache.value
+					}
+
+					if (
+						queuedCache.type === 'none' &&
+						Date.now() - queuedCache.timestamp <
+							NONE_CACHE_DURATION
+					) {
+						return undefined
+					}
 				}
 
-				let bestImage: string | undefined;
+				let bestImage: string | undefined
 
-				// Block 1: Network Fetch
+			
+
 				try {
-					// Use absolute URL to bypass PWA/ServiceWorker relative path routing bugs.
-					// We check for 'window' to ensure SvelteKit SSR doesn't crash here.
-					const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-					
-					// CHANGED: Endpoint renamed to 'artist-art' to bypass Safari/WebKit content blockers.
+					const baseUrl =
+						typeof window !== 'undefined'
+							? window.location.origin
+							: ''
+
+					// Safari/WebKit + PWA safe endpoint
 					const response = await fetch(
-						`${baseUrl}/api/artist-art?artist=${encodeURIComponent(artist)}`,
+						`${baseUrl}/api/artist-art?artist=${encodeURIComponent(
+							artist,
+						)}`,
+						{
+							headers: {
+								Accept: 'application/json',
+							},
+						},
 					)
 
 					if (!response.ok) {
-						safeSetStorage(key, 'none')
+						console.warn(
+							`[Artwork] API returned ${response.status} for "${artist}"`,
+						)
+
+						safeSetStorage(key, {
+							type: 'none',
+							timestamp: Date.now(),
+						})
+
 						return undefined
 					}
 
-					const data = (await response.json()) as DeezerSearchResponse
+
+					let data: DeezerSearchResponse
+
+					try {
+						const text = await response.text()
+
+						// Detect accidental HTML responses
+						if (text.trim().startsWith('<')) {
+							console.error(
+								`[Artwork] Received HTML instead of JSON for "${artist}"`,
+							)
+
+							safeSetStorage(key, {
+								type: 'none',
+								timestamp: Date.now(),
+							})
+
+							return undefined
+						}
+
+						data = JSON.parse(text) as DeezerSearchResponse
+					} catch (parseError) {
+						console.error(
+							`[Artwork] Failed to parse JSON for "${artist}"`,
+							parseError,
+						)
+
+						safeSetStorage(key, {
+							type: 'none',
+							timestamp: Date.now(),
+						})
+
+						return undefined
+					}
+
+					-
 
 					if (data.data && data.data.length > 0) {
 						const bestMatch = data.data[0]
+
 						bestImage =
 							bestMatch.picture_xl ||
 							bestMatch.picture_big ||
@@ -94,22 +195,39 @@ export const getArtistArtwork = async (
 							bestMatch.picture
 					}
 				} catch (networkError: any) {
-					// Extract the specific exception name and message to see exactly why it failed
-					const errorName = networkError?.name || 'Unknown Error';
-					const errorMessage = networkError?.message || 'No message provided';
-					
-					console.error(`[Network Error] Failed to fetch artwork for ${artist}: ${errorName} - ${errorMessage}`, networkError);
-					return undefined 
-				}
+					const errorName =
+						networkError?.name || 'Unknown Error'
 
-				// Block 2: Caching and Returning
-				if (bestImage) {
-					safeSetStorage(key, bestImage)
-					return bestImage
-				} else {
-					safeSetStorage(key, 'none')
+					const errorMessage =
+						networkError?.message ||
+						'No message provided'
+
+					console.error(
+						`[Network Error] Failed to fetch artwork for "${artist}": ${errorName} - ${errorMessage}`,
+						networkError,
+					)
+
 					return undefined
 				}
+
+				
+
+				if (bestImage) {
+					safeSetStorage(key, {
+						type: 'image',
+						value: bestImage,
+						timestamp: Date.now(),
+					})
+
+					return bestImage
+				}
+
+				safeSetStorage(key, {
+					type: 'none',
+					timestamp: Date.now(),
+				})
+
+				return undefined
 			})
 		} finally {
 			pendingRequests.delete(artist)
