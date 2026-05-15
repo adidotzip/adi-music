@@ -22,6 +22,11 @@ type DeezerSearchResponse = {
 	data: DeezerArtist[]
 }
 
+type ApiResponse = {
+	success: boolean
+	data: DeezerSearchResponse
+}
+
 type CachedArtwork =
 	| {
 			type: 'image'
@@ -147,7 +152,7 @@ export const getArtistArtwork = async (
 						return undefined
 					}
 
-					let data: DeezerSearchResponse
+					let apiRes: ApiResponse
 
 					try {
 						const text = await response.text()
@@ -166,7 +171,7 @@ export const getArtistArtwork = async (
 							return undefined
 						}
 
-						data = JSON.parse(text) as DeezerSearchResponse
+						apiRes = JSON.parse(text) as ApiResponse
 					} catch (parseError) {
 						console.error(
 							`[Artwork] Failed to parse JSON for "${artist}"`,
@@ -181,14 +186,16 @@ export const getArtistArtwork = async (
 						return undefined
 					}
 
-					if (data.data && data.data.length > 0) {
-						const bestMatch = data.data[0]
+					if (apiRes.success && apiRes.data?.data && apiRes.data.data.length > 0) {
+						const bestMatch = apiRes.data.data[0]
 
-						bestImage =
-							bestMatch.picture_xl ||
-							bestMatch.picture_big ||
-							bestMatch.picture_medium ||
-							bestMatch.picture
+						if (bestMatch) {
+							bestImage =
+								bestMatch.picture_xl ||
+								bestMatch.picture_big ||
+								bestMatch.picture_medium ||
+								bestMatch.picture
+						}
 					}
 				} catch (networkError: any) {
 					const errorName =
