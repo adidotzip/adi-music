@@ -5,10 +5,12 @@
 	import type { RouteId } from '$app/types'
 	import { ripple } from '$lib/attachments/ripple.ts'
 	import type { QueryResult } from '$lib/db/query/query.ts'
+	import { getAnimatedArtwork } from '$lib/helpers/animated-artwork.ts'
 	import { createManagedArtwork } from '$lib/helpers/create-managed-artwork.svelte.ts'
 	import { dbGetAlbumTracksIdsByName, dbGetArtistTracksIdsByName } from '$lib/library/get/ids'
 	import type { AlbumData, ArtistData } from '$lib/library/get/value'
 	import { createAlbumQuery, createArtistQuery } from '$lib/library/get/value-queries'
+	import { UNKNOWN_ITEM } from '$lib/library/types'
 	import Artwork from '../Artwork.svelte'
 
 	export type LibraryGridItemType = 'albums' | 'artists'
@@ -56,6 +58,23 @@
 		}
 
 		return undefined
+	})
+
+	let animatedArtworkSrc = $state<string | undefined>()
+	$effect(() => {
+		if (type === 'albums' && item) {
+			const album = item as AlbumData
+			const artist = (album.artists[0] as string) ?? ''
+			if (artist === UNKNOWN_ITEM) {
+				animatedArtworkSrc = undefined
+				return
+			}
+			getAnimatedArtwork(artist, album.name).then((url) => {
+				animatedArtworkSrc = url
+			})
+		} else {
+			animatedArtworkSrc = undefined
+		}
 	})
 
 	const linkProps = $derived.by(() => {
@@ -154,6 +173,7 @@
 >
 	<Artwork
 		src={artworkSrc()}
+		animatedSrc={animatedArtworkSrc}
 		fallbackIcon={type === 'albums' ? 'album' : 'person'}
 		class="w-full rounded-[inherit]"
 	/>
