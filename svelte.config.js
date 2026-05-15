@@ -77,6 +77,7 @@ const config = {
 					// Lyrics
 					'https://lrclib.net',
 					'https://lyricsplus.prjktla.workers.dev',
+					'https://unison.boidu.dev',
 
 					// JioSaavn
 					'https://jiosaavn-apix.arcadopredator.workers.dev',
