@@ -2,12 +2,17 @@
 import adapter from '@sveltejs/adapter-static'
 import { loadEnv } from 'vite'
 
+
 const env = loadEnv('production', process.cwd(), 'PUBLIC_')
+
+// Helper to keep CSP arrays clean
+const cleanCsp = (list) => list.filter(Boolean);
 
 /** @type {Config} */
 const config = {
 	compilerOptions: {
 		runes: true,
+		
 		experimental: {
 			async: true,
 		},
@@ -18,7 +23,6 @@ const config = {
 		},
 		outDir: './.generated/svelte-kit',
 		adapter: adapter({
-			// When changing this, also update env variable
 			fallback: '200.html',
 		}),
 		alias: {
@@ -29,19 +33,20 @@ const config = {
 				'default-src': ['none'],
 				'script-src': ['self', 'https://gc.zgo.at/'],
 				'style-src': ['self', 'unsafe-inline'],
-				'img-src': [
+				'img-src': cleanCsp([
 					'self',
 					'blob:',
-					env.PUBLIC_GOAT_COUNTER_URL ? `${env.PUBLIC_GOAT_COUNTER_URL}/count` : '',
-				],
+					env.PUBLIC_GOAT_COUNTER_URL ? `${env.PUBLIC_GOAT_COUNTER_URL}/count` : null,
+				]),
 				'media-src': ['self', 'blob:'],
 				'font-src': ['self'],
-				'connect-src': [
+				'connect-src': cleanCsp([
 					'self',
-					env.PUBLIC_GOAT_COUNTER_URL ?? '',
+					env.PUBLIC_GOAT_COUNTER_URL,
 					'https://lrclib.net',
 					'https://lyricsplus.prjktla.workers.dev',
-				],
+					'https://artwork.m8tec.top/api/v1/artwork/search',
+				]),
 				'form-action': ['none'],
 				'manifest-src': ['self'],
 				'base-uri': ['none'],
@@ -49,9 +54,9 @@ const config = {
 		},
 		typescript: {
 			config: (tsConfig) => {
+				
 				tsConfig.extends = '../../tsconfig.base.json'
 				tsConfig.include.push('../paraglide/**/*')
-
 				return tsConfig
 			},
 		},
