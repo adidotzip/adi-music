@@ -1,14 +1,12 @@
-import { THEME_PALLETTE_LIGHT } from '../../../server/theme-colors.ts'
-
-const foregroundColor = THEME_PALLETTE_LIGHT.onPrimary
+import { logoBase64 } from '$lib/assets/logo.base64.ts'
 
 export const getAppIcon = (clipBounds = false): string => `
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
     ${
 		clipBounds
 			? `<defs>
                     <clipPath id="bounds">
-                        <circle cx="12" cy="12" r="11.16" />
+                        <circle cx="256" cy="256" r="256" />
                     </clipPath>
                 </defs>
             `
@@ -16,21 +14,7 @@ export const getAppIcon = (clipBounds = false): string => `
 	}
     
     <g ${clipBounds ? 'clip-path="url(#bounds)"' : ''}>
-        <g id="foreground">
-            <rect width="100%" height="100%" fill="${THEME_PALLETTE_LIGHT.primary}" />
-
-            <rect width="2" height="10" fill="${foregroundColor}" x="13" y="6" rx="1" ry="1" />
-            <rect width="6" height="4" fill="${foregroundColor}" x="9" y="13" rx="1" ry="1" />
-        </g>
+        <image href="data:image/png;base64,${logoBase64}" width="512" height="512" />
     </g>
-
-    <style>
-        @media (max-width: 40px) {
-            #foreground {
-                transform: scale(1.4);
-                transform-origin:center;
-            }
-        }
-    </style>
 </svg>
 `
