@@ -1,6 +1,9 @@
 import { UNKNOWN_ITEM } from '$lib/library/types.ts'
 import { SerialQueue } from './serial-queue.ts'
 
+// Check if we are running in the browser
+const isBrowser = typeof window !== 'undefined'
+
 const getStorageKey = (artist: string) => `snaeplayer-artist-artwork.${artist}`
 
 const queue = new SerialQueue()
@@ -20,6 +23,8 @@ type DeezerSearchResponse = {
 
 export const getArtistArtwork = async (
 	artist: string,
+    // Allows passing SvelteKit's special fetch during SSR if needed
+    customFetch: typeof fetch = fetch 
 ): Promise<string | undefined> => {
 	if (artist === UNKNOWN_ITEM) {
 		return undefined
@@ -27,13 +32,14 @@ export const getArtistArtwork = async (
 
 	const key = getStorageKey(artist)
 
-	// Check cache first
-	const cached = localStorage.getItem(key)
-	if (cached) {
-		return cached === 'none' ? undefined : cached
+	// 1. Guard cache checks behind environment check
+	if (isBrowser) {
+		const cached = localStorage.getItem(key)
+		if (cached) {
+			return cached === 'none' ? undefined : cached
+		}
 	}
 
-	// Prevent duplicate requests
 	const pending = pendingRequests.get(artist)
 	if (pending) {
 		return pending
@@ -43,29 +49,31 @@ export const getArtistArtwork = async (
 		try {
 			return await queue.enqueue(async () => {
 				// Re-check cache while waiting in queue
-				const cached = localStorage.getItem(key)
-				if (cached) {
-					return cached === 'none' ? undefined : cached
+				if (isBrowser) {
+					const cached = localStorage.getItem(key)
+					if (cached) {
+						return cached === 'none' ? undefined : cached
+					}
 				}
 
 				try {
-					// Using internal Deezer proxy to avoid CORS issues
-					const response = await fetch(
+					// 2. Use customFetch to prevent relative URL crashes in SSR
+					const response = await customFetch(
 						`/api/deezer?artist=${encodeURIComponent(artist)}`,
 					)
 
 					if (!response.ok) {
-						localStorage.setItem(key, 'none')
+						if (isBrowser) localStorage.setItem(key, 'none')
 						return undefined
 					}
 
-					const data =
-						(await response.json()) as DeezerSearchResponse
+					const data = (await response.json()) as DeezerSearchResponse
 
 					if (data.data && data.data.length > 0) {
 						const bestMatch = data.data[0]
 
-						// Prefer highest quality image
+						// 3. Double-check proxy response! 
+                        // If proxy hits standard /search, you need: bestMatch.artist.picture_xl
 						const image =
 							bestMatch.picture_xl ||
 							bestMatch.picture_big ||
@@ -73,15 +81,15 @@ export const getArtistArtwork = async (
 							bestMatch.picture
 
 						if (image) {
-							localStorage.setItem(key, image)
+							if (isBrowser) localStorage.setItem(key, image)
 							return image
 						}
 					}
 
-					localStorage.setItem(key, 'none')
+					if (isBrowser) localStorage.setItem(key, 'none')
 				} catch (error) {
 					console.error('Failed to fetch artist artwork', error)
-					// Don't cache 'none' on network error to allow retry
+					// Don't cache 'none' on network/parsing error to allow retry
 				}
 
 				return undefined
