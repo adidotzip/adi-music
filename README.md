@@ -1,38 +1,82 @@
 # Adi Music
+fork of **[snae player](https://snaeplayer.com)**
 
-**[snaeplayer.com](https://snaeplayer.com)** - Local music player in the browser.
+🎵 **[Adi Music](https://music.imreallyadi.space)** is a modern local music player that runs entirely in your browser.
+Play audio files directly from your device with support for playlists, queue management, favorites, synchronized lyrics, playback speed controls, equalizer presets, and dynamic artwork-based theming that adapts to your music.
 
-Play audio files stored on your device. Includes playlists, queue, favorites, equalizer, playback speed, and artwork-based theming.
+Built for people who want a clean, fast, and private listening experience without installing a heavyweight desktop app ✨
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/minht11/local-music-pwa/main/src/routes/(marketing)/assets/hero.avif" height="400" alt="Adi Music showing the music library and playback controls" />
-</p>
+---
 
-## Browser support
+## Features
 
-Works in all modern browsers. When the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API) is available, currently Chromium-based browsers, the app reads files directly from your chosen folder. In other browsers, files are copied into IndexedDB, which doubles the storage used.
+* 🎧 Local music playback
+* 📂 Folder-based library support
+* 📝 Synced lyrics support
+* ❤️ Favorites and playlists
+* 📜 Queue management
+* 🎚️ Equalizer controls
+* ⏩ Playback speed adjustment
+* 🎨 Dynamic UI theming from album artwork
+* 💾 Offline-friendly experience
+* Material Design
+
+---
+
+## Browser Support
+
+Adi Music works in all modern browsers.
+
+On browsers that support the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API?utm_source=chatgpt.com), currently Chromium-based browsers, the app can read audio files directly from folders you choose.
+
+In browsers without File System Access support, files are stored in IndexedDB instead. This provides compatibility at the cost of additional local storage usage.
+
+---
 
 ## Privacy
 
-Your music files and library data stay on your device. The app does not collect or transmit them.
+Your music library stays entirely on your device.
+Adi Music does not upload, collect, or transmit your audio files or personal library data.
 
-Page views are counted using [GoatCounter](https://goatcounter.com/), a minimal privacy-preserving analytics tool.
+Anonymous page analytics are powered by [GoatCounter](https://goatcounter.com/?utm_source=chatgpt.com), a lightweight privacy-focused analytics platform.
 
-## Tech stack
+---
 
-SvelteKit/Svelte 5 · TypeScript · Tailwind CSS 4
+## Lyrics Sources
 
-## Building locally
+Lyrics are fetched from multiple providers for better coverage and synchronization quality:
 
-Clone the repo, then:
+1. LRCLIB
+2. Lyrics+
+3. BetterLyrics
 
-```
+---
+
+## APIs & Credits
+
+* [Apple Music Animated Artwork API](https://github.com/m8tec/apple-music-animated-artworks)
+
+---
+
+## Tech Stack
+
+* SvelteKit / Svelte 5
+* TypeScript
+* Tailwind CSS 4
+
+---
+
+## Building Locally
+
+Clone the repository and install dependencies:
+
+```bash
 pnpm install
 pnpm run build
 ```
 
-Or run the development server:
+Start the development server:
 
-```
+```bash
 pnpm run dev
 ```
