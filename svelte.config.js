@@ -12,54 +12,93 @@ const config = {
 			async: true,
 		},
 	},
+
 	kit: {
 		paths: {
 			relative: false,
 		},
+
 		outDir: './.generated/svelte-kit',
+
 		adapter: adapter({
 			// When changing this, also update env variable
 			fallback: '200.html',
 		}),
+
 		alias: {
 			$paraglide: './.generated/paraglide',
 		},
+
 		csp: {
 			directives: {
 				'default-src': ['none'],
+
 				'script-src': ['self', 'https://gc.zgo.at/'],
+
 				'style-src': ['self', 'unsafe-inline'],
+
 				'img-src': [
 					'self',
 					'blob:',
-					env.PUBLIC_GOAT_COUNTER_URL ? `${env.PUBLIC_GOAT_COUNTER_URL}/count` : '',
+					env.PUBLIC_GOAT_COUNTER_URL
+						? `${env.PUBLIC_GOAT_COUNTER_URL}/count`
+						: '',
+
+					// JioSaavn
 					'https://*.jiosaavncdn.com',
 					'https://*.saavncdn.com',
+
+					// Apple
 					'https://*.mzstatic.com',
+
+					// Deezer
+					'https://e-cdns-images.dzcdn.net',
+					'https://cdn-images.dzcdn.net',
 				],
+
 				'media-src': [
 					'self',
 					'blob:',
+
 					'https://*.jiosaavncdn.com',
 					'https://*.saavncdn.com',
+
 					'https://mvod.itunes.apple.com',
 					'https://*.itunes.apple.com',
 				],
+
 				'font-src': ['self'],
+
 				'connect-src': [
 					'self',
+
 					env.PUBLIC_GOAT_COUNTER_URL ?? '',
+
+					// Lyrics
 					'https://lrclib.net',
 					'https://lyricsplus.prjktla.workers.dev',
+
+					// JioSaavn
 					'https://jiosaavn-apix.arcadopredator.workers.dev',
+
+					// Artwork
 					'https://artwork.m8tec.top',
+
+					// Apple
 					'https://itunes.apple.com',
+
+					// Deezer API
+					'https://api.deezer.com',
 				],
+
 				'form-action': ['none'],
+
 				'manifest-src': ['self'],
+
 				'base-uri': ['none'],
 			},
 		},
+
 		typescript: {
 			config: (tsConfig) => {
 				tsConfig.extends = '../../tsconfig.base.json'
@@ -68,6 +107,7 @@ const config = {
 				return tsConfig
 			},
 		},
+
 		serviceWorker: {
 			register: false,
 		},
