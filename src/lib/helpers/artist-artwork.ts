@@ -69,8 +69,13 @@ export const getArtistArtwork = async (
 
 				// Block 1: Network Fetch
 				try {
+					// Use absolute URL to bypass PWA/ServiceWorker relative path routing bugs.
+					// We check for 'window' to ensure SvelteKit SSR doesn't crash here.
+					const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+					
+					// CHANGED: Endpoint renamed to 'artist-art' to bypass Safari/WebKit content blockers.
 					const response = await fetch(
-						`/api/deezer?artist=${encodeURIComponent(artist)}`,
+						`${baseUrl}/api/artist-art?artist=${encodeURIComponent(artist)}`,
 					)
 
 					if (!response.ok) {
@@ -88,10 +93,12 @@ export const getArtistArtwork = async (
 							bestMatch.picture_medium ||
 							bestMatch.picture
 					}
-				} catch (networkError) {
-					// This now ONLY catches real network/fetch errors.
-					// If you still see this, an ad-blocker or tracker prevention is blocking "/api/deezer".
-					console.error(`[Network Error] Failed to fetch artwork for ${artist}:`, networkError)
+				} catch (networkError: any) {
+					// Extract the specific exception name and message to see exactly why it failed
+					const errorName = networkError?.name || 'Unknown Error';
+					const errorMessage = networkError?.message || 'No message provided';
+					
+					console.error(`[Network Error] Failed to fetch artwork for ${artist}: ${errorName} - ${errorMessage}`, networkError);
 					return undefined 
 				}
 
