@@ -6,17 +6,34 @@ const getStorageKey = (artist: string) => `snaeplayer-artist-artwork.${artist}`
 const queue = new SerialQueue()
 const pendingRequests = new Map<string, Promise<string | undefined>>()
 
-export const getArtistArtwork = async (artist: string): Promise<string | undefined> => {
+type DeezerArtist = {
+	name: string
+	picture?: string
+	picture_medium?: string
+	picture_big?: string
+	picture_xl?: string
+}
+
+type DeezerSearchResponse = {
+	data: DeezerArtist[]
+}
+
+export const getArtistArtwork = async (
+	artist: string,
+): Promise<string | undefined> => {
 	if (artist === UNKNOWN_ITEM) {
 		return undefined
 	}
 
 	const key = getStorageKey(artist)
+
+	// Check cache first
 	const cached = localStorage.getItem(key)
 	if (cached) {
 		return cached === 'none' ? undefined : cached
 	}
 
+	// Prevent duplicate requests
 	const pending = pendingRequests.get(artist)
 	if (pending) {
 		return pending
@@ -25,34 +42,44 @@ export const getArtistArtwork = async (artist: string): Promise<string | undefin
 	const request = (async () => {
 		try {
 			return await queue.enqueue(async () => {
-				// Re-check cache in case it was populated while waiting in queue
+				// Re-check cache while waiting in queue
 				const cached = localStorage.getItem(key)
 				if (cached) {
 					return cached === 'none' ? undefined : cached
 				}
 
 				try {
-					// Searching for album is more reliable to get artwork for an artist in iTunes API
-					// as artists often don't have a direct 'artworkUrl' in the musicArtist entity.
 					const searchParams = new URLSearchParams({
-						term: artist,
-						entity: 'album',
-						limit: '1',
+						q: artist,
 					})
-					const response = await fetch(`https://itunes.apple.com/search?${searchParams.toString()}`)
+
+					// Using Deezer search API
+					const response = await fetch(
+						`https://api.deezer.com/search/artist?${searchParams.toString()}`,
+					)
 
 					if (!response.ok) {
 						localStorage.setItem(key, 'none')
 						return undefined
 					}
 
-					const data = (await response.json()) as { results: { artworkUrl100?: string }[] }
-					if (data.results && data.results.length > 0 && data.results[0].artworkUrl100) {
-						// Upgrade image size from 100x100 to 600x600
-						// Using regex to handle different dimensions and suffixes
-						const url = data.results[0].artworkUrl100.replace(/\/\d+x\d+/, '/600x600')
-						localStorage.setItem(key, url)
-						return url
+					const data =
+						(await response.json()) as DeezerSearchResponse
+
+					if (data.data && data.data.length > 0) {
+						const bestMatch = data.data[0]
+
+						// Prefer highest quality image
+						const image =
+							bestMatch.picture_xl ||
+							bestMatch.picture_big ||
+							bestMatch.picture_medium ||
+							bestMatch.picture
+
+						if (image) {
+							localStorage.setItem(key, image)
+							return image
+						}
 					}
 
 					localStorage.setItem(key, 'none')
@@ -69,5 +96,6 @@ export const getArtistArtwork = async (artist: string): Promise<string | undefin
 	})()
 
 	pendingRequests.set(artist, request)
+
 	return request
 }
