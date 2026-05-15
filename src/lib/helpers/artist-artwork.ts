@@ -49,13 +49,9 @@ export const getArtistArtwork = async (
 				}
 
 				try {
-					const searchParams = new URLSearchParams({
-						q: artist,
-					})
-
-					// Using Deezer search API
+					// Using internal Deezer proxy to avoid CORS issues
 					const response = await fetch(
-						`https://api.deezer.com/search/artist?${searchParams.toString()}`,
+						`/api/deezer?artist=${encodeURIComponent(artist)}`,
 					)
 
 					if (!response.ok) {
@@ -85,7 +81,7 @@ export const getArtistArtwork = async (
 					localStorage.setItem(key, 'none')
 				} catch (error) {
 					console.error('Failed to fetch artist artwork', error)
-					localStorage.setItem(key, 'none')
+					// Don't cache 'none' on network error to allow retry
 				}
 
 				return undefined
