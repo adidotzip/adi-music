@@ -314,7 +314,6 @@
 								updateScrollPosition()
 							}}
 						>
-							<!-- Main lyrics block -->
 							{#if primaryWords.length > 0}
 								<div class="primary-lyrics-block">
 									{#each primaryWords as word}
@@ -337,7 +336,6 @@
 								</div>
 							{/if}
 
-							<!-- Secondary lyrics block (forced safely below main lyrics) -->
 							{#if secondaryWords.length > 0}
 								<div class="secondary-lyrics-block">
 									{#each secondaryWords as word}
@@ -487,12 +485,12 @@
 		box-decoration-break: clone;
 		/* Slight pop up animation setup */
 		transform: translateY(0);
-		transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+		transition: transform 0.25s ease-out;
 	}
 
 	/* Moves words slightly up when sung */
 	.lyric-line.active .lyric-word.is-sung {
-		transform: translateY(-4px);
+		transform: translateY(-2px);
 	}
 
 	.lyric-line.active .lyric-word {
@@ -545,6 +543,5 @@
 	.dot.filled {
 		background-color: #ffffff;
 		transform: scale(1.5);
-		box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 	}
 </style>
