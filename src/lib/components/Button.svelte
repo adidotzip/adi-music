@@ -3,12 +3,8 @@
 	import { tooltip } from '../attachments/tooltip.ts'
 
 	export type AllowedButtonElement = 'button' | 'a'
-	// Added 'elevated' as it is a core M3 button style
 	export type ButtonKind = 'filled' | 'toned' | 'outlined' | 'flat' | 'elevated' | 'blank'
-	
-
 	export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl'
-
 	export type ButtonHref<As extends AllowedButtonElement> = As extends 'a' ? string : never
 
 	export interface ButtonProps<As extends AllowedButtonElement> {
@@ -19,23 +15,21 @@
 		target?: string
 		disabled?: boolean
 		href?: ButtonHref<As>
-		class?: ClassValue
+		class?: string
 		tabindex?: number
 		ariaLabel?: string
 		tooltip?: string
-		children?: Snippet
+		children?: import('svelte').Snippet
 		onclick?: (event: MouseEvent) => void
-		onpointerdown?: (event: PointerEvent) => void
 	}
 </script>
 
 <script lang="ts" generics="As extends AllowedButtonElement = 'button'">
-	const {
+	let {
 		as = 'button' as As,
 		kind = 'filled',
 		size = 'md',
 		disabled = false,
-		// svelte-ignore state_referenced_locally possible false positive?
 		href = (as === 'a' ? '' : undefined) as ButtonHref<As>,
 		type = 'button',
 		children,
@@ -54,83 +48,122 @@
 	} as const
 
 	const SIZE_CLASS_MAP = {
-		sm: 'h-8 px-4 text-label-md',
-		md: 'h-10 px-6 text-label-lg',
-		lg: 'h-12 px-8 text-title-sm',
-		xl: 'h-14 px-10 text-title-md',
+		sm: 'h-8 px-4 text-sm',
+		md: 'h-10 px-6 text-base',
+		lg: 'h-12 px-8 text-lg',
+		xl: 'h-14 px-10 text-xl',
 	} as const
 </script>
 
 <svelte:element
-	this={(disabled ? 'button' : as) as AllowedButtonElement}
+	this={(disabled ? 'button' : as) as any}
 	{@attach ripple({ stopPropagation: true })}
 	{@attach tooltip(tooltipMessage)}
 	{...restProps}
 	{type}
 	aria-label={ariaLabel}
 	{href}
-	disabled={disabled === true ? true : undefined}
+	disabled={disabled || undefined}
 	class={[
-		'interactable',
+		'm3-button-base',
 		KIND_CLASS_MAP[kind],
 		kind !== 'blank' && SIZE_CLASS_MAP[size],
-		kind !== 'blank' &&
-			'base-button flex items-center justify-center gap-2 rounded-full active:rounded-2xl active:scale-[0.96]',
 		restProps.class,
 	]}
 >
 	{#if children}
-		{@render children()}
+		<div class="button-content">
+			{@render children()}
+		</div>
 	{/if}
 </svelte:element>
 
 <style lang="postcss">
-	@reference '../../app.css';
-
-	.base-button {
-
-		transition: 
-			background-color 0.2s ease, 
-			color 0.2s ease,
-			border-color 0.2s ease,
-			border-radius 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.2), 
-			transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.2);    
+	/* Use M3 Easing (Fast Spatial) for that organic feel */
+	:root {
+		--m3-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+		--m3-easing-emphasized: cubic-bezier(0.3, 0, 0, 1);
 	}
 
+	.m3-button-base {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		border-radius: 9999px; 
+		border: none;
+		cursor: pointer;
+		overflow: hidden;
+		user-select: none;
+		transition: 
+			background-color 200ms var(--m3-easing-standard),
+			color 200ms var(--m3-easing-standard),
+			box-shadow 200ms var(--m3-easing-standard),
+			border-radius 400ms var(--m3-easing-emphasized),
+			transform 200ms var(--m3-easing-emphasized);
+		
+		
+		font-weight: 500;
+		letter-spacing: 0.1px;
+	}
+
+	
+	.m3-button-base:active:not(:disabled) {
+		
+		border-radius: 12px;
+		transform: scale(0.97);
+	}
+
+	.button-content {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: inherit;
+		z-index: 1;
+	}
+
+	
 	.filled-button {
-		background: var(--color-primary);
+		background-color: var(--color-primary);
 		color: var(--color-onPrimary);
 	}
 
 	.tonal-button {
-		background: var(--color-secondaryContainer);
+		background-color: var(--color-secondaryContainer);
 		color: var(--color-onSecondaryContainer);
 	}
 
 	.outlined-button {
+		background-color: transparent;
 		color: var(--color-primary);
 		border: 1px solid var(--color-outline);
 	}
 
-	.flat-button {
-		color: var(--color-primary);
-	}
-
-
 	.elevated-button {
-		background: var(--color-surfaceContainerLow);
+		background-color: var(--color-surfaceContainerLow);
 		color: var(--color-primary);
-		box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+		box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
+	}
+	
+	.elevated-button:hover:not(:disabled) {
+		box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
 	}
 
-	.base-button[disabled] {
+	/* Disabled state logic consistent with the Switch example */
+	.m3-button-base:disabled {
 		cursor: default;
-		background-color: --alpha(var(--color-onSurface) / 12%);
-		border-color: --alpha(var(--color-onSurface) / 38%);
-		color: --alpha(var(--color-onSurface) / 38%);
 		pointer-events: none;
-		/* Reset shape morphing and scale on disabled elements */
-		transform: none; 
-		border-radius: 9999px; 
+		background-color: color-mix(in srgb, var(--color-onSurface) 12%, transparent);
+		color: color-mix(in srgb, var(--color-onSurface) 38%, transparent);
+		box-shadow: none;
+		transform: none;
+		border-radius: 9999px; /* Reset shape */
+	}
+
+	
+	.m3-button-base:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
 	}
 </style>
