@@ -35,6 +35,7 @@ const config = {
 					env.PUBLIC_GOAT_COUNTER_URL ? `${env.PUBLIC_GOAT_COUNTER_URL}/count` : '',
 					'https://*.jiosaavncdn.com',
 					'https://*.saavncdn.com',
+					'https://is*-ssl.mzstatic.com',
 				],
 				'media-src': [
 					'self',
@@ -52,6 +53,7 @@ const config = {
 					'https://lyricsplus.prjktla.workers.dev',
 					'https://jiosaavn-apix.arcadopredator.workers.dev',
 					'https://artwork.m8tec.top',
+					'https://itunes.apple.com',
 				],
 				'form-action': ['none'],
 				'manifest-src': ['self'],
