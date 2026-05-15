@@ -4,6 +4,7 @@
 
 	interface Props {
 		src: string | undefined
+		animatedSrc?: string | undefined
 		class?: ClassValue
 		alt?: string
 		fallbackIcon?: IconType | false
@@ -13,6 +14,7 @@
 
 	const {
 		src,
+		animatedSrc,
 		fallbackIcon = 'musicNote',
 		noFallbackBg,
 		class: className,
@@ -21,13 +23,34 @@
 	}: Props = $props()
 
 	let error = $state(false)
+	let animatedError = $state(false)
+
+	let canPlayHLS = $state(false)
+	$effect(() => {
+		const video = document.createElement('video')
+		canPlayHLS = video.canPlayType('application/vnd.apple.mpegurl') !== ''
+	})
 
 	$effect(() => {
 		void src
+		void animatedSrc
 
 		untrack(() => {
 			error = false
+			animatedError = false
 		})
+	})
+
+	const shouldShowAnimated = $derived.by(() => {
+		if (!animatedSrc || animatedError) {
+			return false
+		}
+
+		if (animatedSrc.endsWith('.m3u8')) {
+			return canPlayHLS
+		}
+
+		return true
 	})
 </script>
 
@@ -38,7 +61,19 @@
 		className,
 	]}
 >
-	{#if src && !error}
+	{#if shouldShowAnimated}
+		<video
+			src={animatedSrc}
+			autoplay
+			loop
+			muted
+			playsinline
+			class="size-full object-cover"
+			onerror={() => {
+				animatedError = true
+			}}
+		></video>
+	{:else if src && !error}
 		<!-- biome-ignore lint/a11y/useAltText: false positive, alt exists -->
 		<img
 			{src}
