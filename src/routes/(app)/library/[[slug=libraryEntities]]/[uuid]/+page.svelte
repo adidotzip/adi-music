@@ -8,6 +8,7 @@
 	import TracksListContainer from '$lib/components/tracks/TracksListContainer.svelte'
 	import { initPageQueries } from '$lib/db/query/page-query.svelte.ts'
 	import { getAnimatedArtwork } from '$lib/helpers/animated-artwork'
+	import { getArtistArtwork } from '$lib/helpers/artist-artwork.ts'
 	import { createManagedArtwork } from '$lib/helpers/create-managed-artwork.svelte'
 	import { formatArtists, formatNameOrUnknown } from '$lib/helpers/utils/text.ts'
 	import type { AlbumData, TrackData } from '$lib/library/get/value.ts'
@@ -52,6 +53,7 @@
 		return null
 	})
 
+	let artistArtworkSrc = $state<string | undefined>()
 	let animatedArtworkSrc = $state<string | undefined>()
 	$effect(() => {
 		if (slug === 'albums' && item) {
@@ -63,6 +65,11 @@
 			}
 			getAnimatedArtwork(artist, album.name).then((url) => {
 				animatedArtworkSrc = url
+			})
+		} else if (slug === 'artists' && item) {
+			artistArtworkSrc = undefined
+			getArtistArtwork(item.name).then((url) => {
+				artistArtworkSrc = url
 			})
 		} else {
 			animatedArtworkSrc = undefined
@@ -151,7 +158,7 @@
 	>
 		{#if slug !== 'playlists'}
 			<Artwork
-				src={artworkSrc()}
+				src={slug === 'artists' ? artistArtworkSrc : artworkSrc()}
 				animatedSrc={animatedArtworkSrc}
 				fallbackIcon={getFallbackArtwork()}
 				class="h-49 shrink-0 rounded-2xl @2xl:h-full"
