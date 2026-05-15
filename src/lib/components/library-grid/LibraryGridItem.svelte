@@ -6,6 +6,7 @@
 	import { ripple } from '$lib/attachments/ripple.ts'
 	import type { QueryResult } from '$lib/db/query/query.ts'
 	import { getAnimatedArtwork } from '$lib/helpers/animated-artwork.ts'
+	import { getArtistArtwork } from '$lib/helpers/artist-artwork.ts'
 	import { createManagedArtwork } from '$lib/helpers/create-managed-artwork.svelte.ts'
 	import { dbGetAlbumTracksIdsByName, dbGetArtistTracksIdsByName } from '$lib/library/get/ids'
 	import type { AlbumData, ArtistData } from '$lib/library/get/value'
@@ -52,6 +53,7 @@
 		) as QueryResult<Value>
 	const { value: item } = $derived(query)
 
+	let artistArtworkSrc = $state<string | undefined>()
 	const artworkSrc = createManagedArtwork(() => {
 		if (type === 'albums') {
 			return item ? (item as AlbumData).image : undefined
@@ -71,6 +73,12 @@
 			}
 			getAnimatedArtwork(artist, album.name).then((url) => {
 				animatedArtworkSrc = url
+			})
+		} else if (type === 'artists' && item) {
+			const artist = item as ArtistData
+			artistArtworkSrc = undefined
+			getArtistArtwork(artist.name).then((url) => {
+				artistArtworkSrc = url
 			})
 		} else {
 			animatedArtworkSrc = undefined
@@ -172,7 +180,7 @@
 	}}
 >
 	<Artwork
-		src={artworkSrc()}
+		src={type === 'artists' ? artistArtworkSrc : artworkSrc()}
 		animatedSrc={animatedArtworkSrc}
 		fallbackIcon={type === 'albums' ? 'album' : 'person'}
 		class="w-full rounded-[inherit]"
