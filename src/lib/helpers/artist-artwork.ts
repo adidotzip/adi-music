@@ -1,13 +1,14 @@
 import { UNKNOWN_ITEM } from '$lib/library/types.ts'
 import { SerialQueue } from './serial-queue.ts'
 
+const queue = new SerialQueue()
+
+const NONE_CACHE_DURATION = 1000 * 60 * 30 // 30 mins
+
+const pendingRequests = new Map<string, Promise<string | undefined>>()
+
 const getStorageKey = (artist: string) =>
 	`snaeplayer-artist-artwork.${artist}`
-
-const NONE_CACHE_DURATION = 1000 * 60 * 30 
-
-const queue = new SerialQueue()
-const pendingRequests = new Map<string, Promise<string | undefined>>()
 
 type DeezerArtist = {
 	name: string
@@ -32,32 +33,35 @@ type CachedArtwork =
 			timestamp: number
 	  }
 
+// --------------------
+// Storage Helpers
+// --------------------
 
 const safeSetStorage = (key: string, value: CachedArtwork) => {
 	try {
 		localStorage.setItem(key, JSON.stringify(value))
 	} catch (error) {
-		console.warn(
-			`[Storage Warning] Could not cache artwork for ${key}`,
-			error,
-		)
+		console.warn(`[Storage Warning] Failed to cache ${key}`, error)
 	}
 }
 
 const safeGetStorage = (key: string): CachedArtwork | null => {
 	try {
-		const value = localStorage.getItem(key)
+		const raw = localStorage.getItem(key)
 
-		if (!value) {
+		if (!raw) {
 			return null
 		}
 
-		return JSON.parse(value) as CachedArtwork
+		return JSON.parse(raw) as CachedArtwork
 	} catch {
 		return null
 	}
 }
-// Main Function
+
+// --------------------
+// Main
+// --------------------
 
 export const getArtistArtwork = async (
 	artist: string,
@@ -68,16 +72,14 @@ export const getArtistArtwork = async (
 
 	const key = getStorageKey(artist)
 
-
+	// Cache lookup
 	const cached = safeGetStorage(key)
 
 	if (cached) {
-		// Cached image
 		if (cached.type === 'image') {
 			return cached.value
 		}
 
-		
 		if (
 			cached.type === 'none' &&
 			Date.now() - cached.timestamp < NONE_CACHE_DURATION
@@ -86,7 +88,7 @@ export const getArtistArtwork = async (
 		}
 	}
 
-
+	// Deduplicate requests
 	const pending = pendingRequests.get(artist)
 
 	if (pending) {
@@ -96,17 +98,17 @@ export const getArtistArtwork = async (
 	const request = (async () => {
 		try {
 			return await queue.enqueue(async () => {
-		
-				const queuedCache = safeGetStorage(key)
+				// Recheck cache after queue wait
+				const cachedAgain = safeGetStorage(key)
 
-				if (queuedCache) {
-					if (queuedCache.type === 'image') {
-						return queuedCache.value
+				if (cachedAgain) {
+					if (cachedAgain.type === 'image') {
+						return cachedAgain.value
 					}
 
 					if (
-						queuedCache.type === 'none' &&
-						Date.now() - queuedCache.timestamp <
+						cachedAgain.type === 'none' &&
+						Date.now() - cachedAgain.timestamp <
 							NONE_CACHE_DURATION
 					) {
 						return undefined
@@ -115,15 +117,12 @@ export const getArtistArtwork = async (
 
 				let bestImage: string | undefined
 
-			
-
 				try {
 					const baseUrl =
 						typeof window !== 'undefined'
 							? window.location.origin
 							: ''
 
-					// Safari/WebKit + PWA safe endpoint
 					const response = await fetch(
 						`${baseUrl}/api/artist-art?artist=${encodeURIComponent(
 							artist,
@@ -148,16 +147,15 @@ export const getArtistArtwork = async (
 						return undefined
 					}
 
-
 					let data: DeezerSearchResponse
 
 					try {
 						const text = await response.text()
 
-						// Detect accidental HTML responses
+						// HTML response protection
 						if (text.trim().startsWith('<')) {
 							console.error(
-								`[Artwork] Received HTML instead of JSON for "${artist}"`,
+								`[Artwork] HTML returned instead of JSON for "${artist}"`,
 							)
 
 							safeSetStorage(key, {
@@ -183,8 +181,6 @@ export const getArtistArtwork = async (
 						return undefined
 					}
 
-					-
-
 					if (data.data && data.data.length > 0) {
 						const bestMatch = data.data[0]
 
@@ -199,18 +195,15 @@ export const getArtistArtwork = async (
 						networkError?.name || 'Unknown Error'
 
 					const errorMessage =
-						networkError?.message ||
-						'No message provided'
+						networkError?.message || 'No message provided'
 
 					console.error(
-						`[Network Error] Failed to fetch artwork for "${artist}": ${errorName} - ${errorMessage}`,
+						`[Network Error] ${artist}: ${errorName} - ${errorMessage}`,
 						networkError,
 					)
 
 					return undefined
 				}
-
-				
 
 				if (bestImage) {
 					safeSetStorage(key, {
