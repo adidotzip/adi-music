@@ -2,17 +2,12 @@
 import adapter from '@sveltejs/adapter-static'
 import { loadEnv } from 'vite'
 
-
 const env = loadEnv('production', process.cwd(), 'PUBLIC_')
-
-// Helper to keep CSP arrays clean
-const cleanCsp = (list) => list.filter(Boolean);
 
 /** @type {Config} */
 const config = {
 	compilerOptions: {
 		runes: true,
-		
 		experimental: {
 			async: true,
 		},
@@ -23,6 +18,7 @@ const config = {
 		},
 		outDir: './.generated/svelte-kit',
 		adapter: adapter({
+			// When changing this, also update env variable
 			fallback: '200.html',
 		}),
 		alias: {
@@ -33,20 +29,30 @@ const config = {
 				'default-src': ['none'],
 				'script-src': ['self', 'https://gc.zgo.at/'],
 				'style-src': ['self', 'unsafe-inline'],
-				'img-src': cleanCsp([
+				'img-src': [
 					'self',
 					'blob:',
-					env.PUBLIC_GOAT_COUNTER_URL ? `${env.PUBLIC_GOAT_COUNTER_URL}/count` : null,
-				]),
-				'media-src': ['self', 'blob:'],
-				'font-src': ['self'],
-				'connect-src': cleanCsp([
+					env.PUBLIC_GOAT_COUNTER_URL ? `${env.PUBLIC_GOAT_COUNTER_URL}/count` : '',
+					'https://*.jiosaavncdn.com',
+					'https://*.saavncdn.com',
+				],
+				'media-src': [
 					'self',
-					env.PUBLIC_GOAT_COUNTER_URL,
+					'blob:',
+					'https://*.jiosaavncdn.com',
+					'https://*.saavncdn.com',
+					'https://mvod.itunes.apple.com',
+					'https://*.itunes.apple.com',
+				],
+				'font-src': ['self'],
+				'connect-src': [
+					'self',
+					env.PUBLIC_GOAT_COUNTER_URL ?? '',
 					'https://lrclib.net',
 					'https://lyricsplus.prjktla.workers.dev',
-					'https://artwork.m8tec.top/api/v1/artwork/search',
-				]),
+					'https://jiosaavn-apix.arcadopredator.workers.dev',
+					'https://artwork.m8tec.top',
+				],
 				'form-action': ['none'],
 				'manifest-src': ['self'],
 				'base-uri': ['none'],
@@ -54,9 +60,9 @@ const config = {
 		},
 		typescript: {
 			config: (tsConfig) => {
-				
 				tsConfig.extends = '../../tsconfig.base.json'
 				tsConfig.include.push('../paraglide/**/*')
+
 				return tsConfig
 			},
 		},
