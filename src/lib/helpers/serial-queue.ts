@@ -2,9 +2,12 @@
 export class SerialQueue {
 	#chain = Promise.resolve()
 
-	enqueue(promiseFn: () => Promise<void>): Promise<void> {
+	enqueue<T>(promiseFn: () => Promise<T>): Promise<T> {
 		const result = this.#chain.then(promiseFn)
-		this.#chain = result.catch(() => {})
+		this.#chain = result.then(
+			() => {},
+			() => {},
+		)
 
 		return result
 	}
