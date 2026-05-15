@@ -8,6 +8,8 @@ const LYRICSPLUS_LYRICS_ENDPOINT =
 const LRCLIB_GET_ENDPOINT = 'https://lrclib.net/api/get'
 const LRCLIB_SEARCH_ENDPOINT = 'https://lrclib.net/api/search'
 
+const UNISON_GET_ENDPOINT = 'https://unison.boidu.dev/lyrics'
+
 const LRCLIB_DURATION_TOLERANCE_SECONDS = 4
 
 /**
@@ -15,6 +17,11 @@ const LRCLIB_DURATION_TOLERANCE_SECONDS = 4
  * Fast songs become line-by-line only
  */
 const LINE_ONLY_BPM_THRESHOLD = 140
+
+/**
+ * 🎵 Slow-paced tracks also become line-by-line
+ */
+const SLOW_PACED_BPM_THRESHOLD = 80
 
 export interface SyncedLyricsWord {
 	string: string
@@ -27,7 +34,7 @@ export interface SyncedLyricsLine {
 	words: SyncedLyricsWord[]
 }
 
-export type SyncedLyricsSource = 'lyricsplus' | 'lrclib'
+export type SyncedLyricsSource = 'lyricsplus' | 'lrclib' | 'unison'
 
 export type LyricsSyncMode = 'word' | 'line'
 
@@ -61,14 +68,23 @@ const isFiniteNumber = (value: unknown): value is number =>
 /**
  * 🎵 BPM sync mode logic
  */
-const getLyricsSyncMode = (track: TrackData): LyricsSyncMode => {
+const getLyricsSyncMode = (
+	track: TrackData,
+	result: SyncedLyricsResult,
+): LyricsSyncMode => {
+	// Unison always allows word-by-word
+	if (result.status === 'found' && result.source === 'unison') {
+		return 'word'
+	}
+
 	const bpm = (track as { bpm?: number }).bpm
 
 	if (!bpm) {
 		return 'word'
 	}
 
-	if (bpm >= LINE_ONLY_BPM_THRESHOLD) {
+	// Line-only for very fast or very slow songs
+	if (bpm >= LINE_ONLY_BPM_THRESHOLD || bpm < SLOW_PACED_BPM_THRESHOLD) {
 		return 'line'
 	}
 
@@ -230,6 +246,68 @@ export const parseLrc = (
 	})
 }
 
+/**
+ * TTML Parsing (Basic)
+ */
+export const parseTtml = (ttml: string): SyncedLyricsLine[] => {
+	const lines: SyncedLyricsLine[] = []
+	const pPattern = /<p[^>]*begin="([^"]+)"[^>]*end="([^"]+)"[^>]*>([\s\S]*?)<\/p>/gi
+	const spanPattern = /<span[^>]*begin="([^"]+)"[^>]*end="([^"]+)"[^>]*>([\s\S]*?)<\/span>/gi
+
+	const parseTime = (timeStr: string): number => {
+		const parts = timeStr.split(':')
+		if (parts.length === 3) {
+			return (
+				(Number.parseInt(parts[0], 10) * 3600 +
+					Number.parseInt(parts[1], 10) * 60 +
+					Number.parseFloat(parts[2])) *
+				1000
+			)
+		}
+		if (parts.length === 2) {
+			return (
+				(Number.parseInt(parts[0], 10) * 60 +
+					Number.parseFloat(parts[1])) *
+				1000
+			)
+		}
+		return Number.parseFloat(timeStr) * 1000
+	}
+
+	let pMatch: RegExpExecArray | null
+	// biome-ignore lint/suspicious/noAssignInExpressions: standard regex loop
+	while ((pMatch = pPattern.exec(ttml)) !== null) {
+		const startTime = parseTime(pMatch[1])
+		const endTime = parseTime(pMatch[2])
+		const content = pMatch[3]
+
+		const words: SyncedLyricsWord[] = []
+		let spanMatch: RegExpExecArray | null
+		// biome-ignore lint/suspicious/noAssignInExpressions: standard regex loop
+		while ((spanMatch = spanPattern.exec(content)) !== null) {
+			words.push({
+				string: spanMatch[3].replace(/<[^>]*>/g, '').trim() + ' ',
+				time: parseTime(spanMatch[1]),
+			})
+		}
+
+		if (words.length === 0) {
+			words.push({
+				string: content.replace(/<[^>]*>/g, '').trim(),
+				time: startTime,
+			})
+		}
+
+		lines.push({
+			startTime,
+			endTime,
+			words,
+		})
+	}
+
+	return lines
+}
+
 const normalizeSearchText = (value: string): string =>
 	value
 		.normalize('NFKD')
@@ -248,13 +326,9 @@ const isDurationClose = (
 	actualDuration: number | undefined,
 	expectedDuration: number,
 ): boolean =>
-	!(
-		actualDuration &&
-		expectedDuration
-	) ||
-	Math.abs(
-		Math.round(actualDuration) - expectedDuration,
-	) <= LRCLIB_DURATION_TOLERANCE_SECONDS
+	!(actualDuration && expectedDuration) ||
+	Math.abs(Math.round(actualDuration) - expectedDuration) <=
+		LRCLIB_DURATION_TOLERANCE_SECONDS
 
 const getLrclibResponse = (
 	value: unknown,
@@ -307,10 +381,7 @@ const getLrclibFoundResult = (
 		return { status: 'not-found' }
 	}
 
-	const lines = parseLrc(
-		data.syncedLyrics,
-		durationSeconds * 1000,
-	)
+	const lines = parseLrc(data.syncedLyrics, durationSeconds * 1000)
 
 	return lines.length > 0
 		? {
@@ -326,41 +397,23 @@ const scoreLrclibSearchResult = (
 	track: TrackData,
 	durationSeconds: number,
 ): number => {
-	if (
-		!(
-			data.syncedLyrics &&
-			isDurationClose(
-				data.duration,
-				durationSeconds,
-			)
-		)
-	) {
+	if (!(data.syncedLyrics && isDurationClose(data.duration, durationSeconds))) {
 		return Number.NEGATIVE_INFINITY
 	}
 
-	const expectedTrackName = normalizeSearchText(
-		track.name,
-	)
+	const expectedTrackName = normalizeSearchText(track.name)
 
-	const expectedArtistName = normalizeSearchText(
-		formatArtists(track.artists),
-	)
+	const expectedArtistName = normalizeSearchText(formatArtists(track.artists))
 
 	const expectedAlbumName = normalizeSearchText(
 		formatNameOrUnknown(track.album, ''),
 	)
 
-	const resultTrackName = normalizeSearchText(
-		data.trackName ?? '',
-	)
+	const resultTrackName = normalizeSearchText(data.trackName ?? '')
 
-	const resultArtistName = normalizeSearchText(
-		data.artistName ?? '',
-	)
+	const resultArtistName = normalizeSearchText(data.artistName ?? '')
 
-	const resultAlbumName = normalizeSearchText(
-		data.albumName ?? '',
-	)
+	const resultAlbumName = normalizeSearchText(data.albumName ?? '')
 
 	let score = 0
 
@@ -373,35 +426,24 @@ const scoreLrclibSearchResult = (
 		score += 4
 	}
 
-	if (
-		expectedArtistName &&
-		resultArtistName === expectedArtistName
-	) {
+	if (expectedArtistName && resultArtistName === expectedArtistName) {
 		score += 5
 	} else if (
 		expectedArtistName &&
 		(resultArtistName.includes(expectedArtistName) ||
-			expectedArtistName.includes(
-				resultArtistName,
-			))
+			expectedArtistName.includes(resultArtistName))
 	) {
 		score += 2
 	}
 
-	if (
-		expectedAlbumName &&
-		resultAlbumName === expectedAlbumName
-	) {
+	if (expectedAlbumName && resultAlbumName === expectedAlbumName) {
 		score += 3
 	}
 
 	if (data.duration) {
 		score += Math.max(
 			0,
-			LRCLIB_DURATION_TOLERANCE_SECONDS -
-				Math.abs(
-					data.duration - durationSeconds,
-				),
+			LRCLIB_DURATION_TOLERANCE_SECONDS - Math.abs(data.duration - durationSeconds),
 		)
 	}
 
@@ -422,9 +464,7 @@ const getLyricsPlusLines = (
 	if (Array.isArray(data.lines)) {
 		return data.lines
 			.map(normalizeLine)
-			.filter(
-				(line): line is SyncedLyricsLine => !!line,
-			)
+			.filter((line): line is SyncedLyricsLine => !!line)
 	}
 
 	if (Array.isArray(data.lyrics)) {
@@ -439,36 +479,24 @@ const getLyricsPlusLines = (
 					return
 				}
 
-				const wordsList = line.text
-					.split(whitespacePattern)
-					.filter(Boolean)
+				const wordsList = line.text.split(whitespacePattern).filter(Boolean)
 
 				const totalDuration = line.duration
 
-				const wordDuration =
-					totalDuration /
-					(wordsList.length || 1)
+				const wordDuration = totalDuration / (wordsList.length || 1)
 
 				return {
 					startTime: line.time,
 					endTime: line.time + line.duration,
 
 					words: wordsList.map((word, i) => ({
-						string:
-							word +
-							(i === wordsList.length - 1
-								? ''
-								: ' '),
+						string: word + (i === wordsList.length - 1 ? '' : ' '),
 
-						time: Math.round(
-							line.time + i * wordDuration,
-						),
+						time: Math.round(line.time + i * wordDuration),
 					})),
 				}
 			})
-			.filter(
-				(line): line is SyncedLyricsLine => !!line,
-			)
+			.filter((line): line is SyncedLyricsLine => !!line)
 	}
 
 	const lyricsText =
@@ -479,17 +507,11 @@ const getLyricsPlusLines = (
 			: null
 
 	if (lyricsText) {
-		return parseLrc(
-			lyricsText,
-			durationSeconds * 1000,
-		)
+		return parseLrc(lyricsText, durationSeconds * 1000)
 	}
 
 	if (isRecord(data.data)) {
-		return getLyricsPlusLines(
-			data.data,
-			durationSeconds,
-		)
+		return getLyricsPlusLines(data.data, durationSeconds)
 	}
 
 	return []
@@ -500,27 +522,17 @@ const fetchLyricsPlusLyrics = async (
 	signal: AbortSignal,
 ): Promise<SyncedLyricsLine[]> => {
 	try {
-		const url = new URL(
-			LYRICSPLUS_LYRICS_ENDPOINT,
-		)
+		const url = new URL(LYRICSPLUS_LYRICS_ENDPOINT)
 
 		url.searchParams.set('title', track.name)
 
-		url.searchParams.set(
-			'artist',
-			formatArtists(track.artists),
-		)
+		url.searchParams.set('artist', formatArtists(track.artists))
 
 		url.searchParams.set('source', 'apple')
 
-		const maybeIsrc = (
-			track as { isrc?: unknown }
-		).isrc
+		const maybeIsrc = (track as { isrc?: unknown }).isrc
 
-		if (
-			typeof maybeIsrc === 'string' &&
-			maybeIsrc.trim()
-		) {
+		if (typeof maybeIsrc === 'string' && maybeIsrc.trim()) {
 			url.searchParams.set('isrc', maybeIsrc)
 		}
 
@@ -534,15 +546,9 @@ const fetchLyricsPlusLyrics = async (
 
 		const data: unknown = await response.json()
 
-		return getLyricsPlusLines(
-			data,
-			getDurationSeconds(track),
-		)
+		return getLyricsPlusLines(data, getDurationSeconds(track))
 	} catch (error) {
-		if (
-			error instanceof Error &&
-			error.name === 'AbortError'
-		) {
+		if (error instanceof Error && error.name === 'AbortError') {
 			throw error
 		}
 
@@ -559,20 +565,11 @@ const fetchLrclibExactLyrics = async (
 
 	url.searchParams.set('track_name', track.name)
 
-	url.searchParams.set(
-		'artist_name',
-		formatArtists(track.artists),
-	)
+	url.searchParams.set('artist_name', formatArtists(track.artists))
 
-	url.searchParams.set(
-		'album_name',
-		formatNameOrUnknown(track.album, ''),
-	)
+	url.searchParams.set('album_name', formatNameOrUnknown(track.album, ''))
 
-	url.searchParams.set(
-		'duration',
-		String(durationSeconds),
-	)
+	url.searchParams.set('duration', String(durationSeconds))
 
 	const response = await fetch(url, {
 		signal,
@@ -586,15 +583,10 @@ const fetchLrclibExactLyrics = async (
 		return { status: 'error' }
 	}
 
-	const data = getLrclibResponse(
-		await response.json(),
-	)
+	const data = getLrclibResponse(await response.json())
 
 	return data
-		? getLrclibFoundResult(
-				data,
-				durationSeconds,
-		  )
+		? getLrclibFoundResult(data, durationSeconds)
 		: { status: 'not-found' }
 }
 
@@ -607,15 +599,9 @@ const fetchLrclibSearchLyrics = async (
 
 	url.searchParams.set('track_name', track.name)
 
-	url.searchParams.set(
-		'artist_name',
-		formatArtists(track.artists),
-	)
+	url.searchParams.set('artist_name', formatArtists(track.artists))
 
-	url.searchParams.set(
-		'duration',
-		String(durationSeconds),
-	)
+	url.searchParams.set('duration', String(durationSeconds))
 
 	const response = await fetch(url, {
 		signal,
@@ -637,18 +623,10 @@ const fetchLrclibSearchLyrics = async (
 
 	const bestMatch = data
 		.map(getLrclibResponse)
-		.filter(
-			(
-				item,
-			): item is LrclibLyricsResponse => !!item,
-		)
+		.filter((item): item is LrclibLyricsResponse => !!item)
 		.map((item) => ({
 			item,
-			score: scoreLrclibSearchResult(
-				item,
-				track,
-				durationSeconds,
-			),
+			score: scoreLrclibSearchResult(item, track, durationSeconds),
 		}))
 		.filter(({ score }) => Number.isFinite(score))
 		.sort((a, b) => b.score - a.score)[0]?.item
@@ -657,44 +635,25 @@ const fetchLrclibSearchLyrics = async (
 		return { status: 'not-found' }
 	}
 
-	return getLrclibFoundResult(
-		bestMatch,
-		durationSeconds,
-	)
+	return getLrclibFoundResult(bestMatch, durationSeconds)
 }
 
 const fetchLrclibLyrics = async (
 	track: TrackData,
 	signal: AbortSignal,
 ): Promise<SyncedLyricsResult> => {
-	const durationSeconds =
-		getDurationSeconds(track)
+	const durationSeconds = getDurationSeconds(track)
 
 	try {
-		const exactResult =
-			await fetchLrclibExactLyrics(
-				track,
-				durationSeconds,
-				signal,
-			)
+		const exactResult = await fetchLrclibExactLyrics(track, durationSeconds, signal)
 
-		if (
-			exactResult.status === 'found' ||
-			exactResult.status === 'instrumental'
-		) {
+		if (exactResult.status === 'found' || exactResult.status === 'instrumental') {
 			return exactResult
 		}
 
-		return await fetchLrclibSearchLyrics(
-			track,
-			durationSeconds,
-			signal,
-		)
+		return await fetchLrclibSearchLyrics(track, durationSeconds, signal)
 	} catch (error) {
-		if (
-			error instanceof Error &&
-			error.name === 'AbortError'
-		) {
+		if (error instanceof Error && error.name === 'AbortError') {
 			throw error
 		}
 
@@ -702,8 +661,53 @@ const fetchLrclibLyrics = async (
 	}
 }
 
-const CACHE_TTL_MS =
-	1000 * 60 * 60 * 24 * 7
+/**
+ * Unison lyrics fetching
+ */
+const fetchUnisonLyrics = async (
+	track: TrackData,
+	signal: AbortSignal,
+): Promise<SyncedLyricsResult> => {
+	try {
+		const url = new URL(UNISON_GET_ENDPOINT)
+		url.searchParams.set('song', track.name)
+		url.searchParams.set('artist', formatArtists(track.artists))
+		url.searchParams.set('album', formatNameOrUnknown(track.album, ''))
+		url.searchParams.set('duration', String(getDurationSeconds(track)))
+
+		const response = await fetch(url, { signal })
+		if (!response.ok) {
+			return { status: 'not-found' }
+		}
+
+		const data: any = await response.json()
+		if (!data.success || !data.data) {
+			return { status: 'not-found' }
+		}
+
+		if (data.data.lyrics) {
+			const isTtml = data.data.lyrics.trim().startsWith('<tt')
+			const lines = isTtml
+				? parseTtml(data.data.lyrics)
+				: parseLrc(data.data.lyrics, getDurationSeconds(track) * 1000)
+
+			if (lines.length > 0) {
+				return {
+					status: 'found',
+					source: 'unison',
+					lines,
+				}
+			}
+		}
+
+		return { status: 'not-found' }
+	} catch (error) {
+		if (error instanceof Error && error.name === 'AbortError') throw error
+		return { status: 'error' }
+	}
+}
+
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7
 
 const getLyricsFromCache = async (
 	trackId: number,
@@ -711,19 +715,13 @@ const getLyricsFromCache = async (
 	try {
 		const db = await getDatabase()
 
-		const cached = await db.get(
-			'lyrics',
-			trackId,
-		)
+		const cached = await db.get('lyrics', trackId)
 
 		if (!cached) {
 			return undefined
 		}
 
-		if (
-			Date.now() - cached.cachedAt >
-			CACHE_TTL_MS
-		) {
+		if (Date.now() - cached.cachedAt > CACHE_TTL_MS) {
 			return undefined
 		}
 
@@ -733,10 +731,7 @@ const getLyricsFromCache = async (
 	}
 }
 
-const saveLyricsToCache = async (
-	trackId: number,
-	data: SyncedLyricsResult,
-) => {
+const saveLyricsToCache = async (trackId: number, data: SyncedLyricsResult) => {
 	try {
 		const db = await getDatabase()
 
@@ -757,8 +752,7 @@ export const fetchSyncedLyrics = async (
 	track: TrackData,
 	signal: AbortSignal,
 ): Promise<SyncedLyricsResult> => {
-	const cachedResult =
-		await getLyricsFromCache(track.id)
+	const cachedResult = await getLyricsFromCache(track.id)
 
 	if (cachedResult) {
 		return cachedResult
@@ -769,58 +763,48 @@ export const fetchSyncedLyrics = async (
 			status: 'not-found',
 		}
 
-		const lyricsPlusLines =
-			await fetchLyricsPlusLyrics(
-				track,
-				signal,
-			)
+		// Try Unison first as requested
+		result = await fetchUnisonLyrics(track, signal)
 
-		if (lyricsPlusLines.length > 0) {
-			result = {
-				status: 'found',
-				source: 'lyricsplus',
-				lines: lyricsPlusLines,
+		if (result.status !== 'found') {
+			const lyricsPlusLines = await fetchLyricsPlusLyrics(track, signal)
+
+			if (lyricsPlusLines.length > 0) {
+				result = {
+					status: 'found',
+					source: 'lyricsplus',
+					lines: lyricsPlusLines,
+				}
+			} else {
+				result = await fetchLrclibLyrics(track, signal)
 			}
-		} else {
-			result = await fetchLrclibLyrics(
-				track,
-				signal,
-			)
 		}
 
 		/**
 		 * 🎵 BPM adaptive sync mode
 		 */
 		if (result.status === 'found') {
-			const syncMode =
-				getLyricsSyncMode(track)
+			const syncMode = getLyricsSyncMode(track, result)
 
 			if (syncMode === 'line') {
 				result = {
 					...result,
-					lines: convertToLineOnly(
-						result.lines,
-					),
+					lines: convertToLineOnly(result.lines),
 				}
 			}
 		}
 
 		if (result.status !== 'error') {
-			await saveLyricsToCache(
-				track.id,
-				result,
-			)
+			await saveLyricsToCache(track.id, result)
 		}
 
 		return result
 	} catch (error) {
-		if (
-			error instanceof Error &&
-			error.name === 'AbortError'
-		) {
+		if (error instanceof Error && error.name === 'AbortError') {
 			throw error
 		}
 
 		return { status: 'error' }
 	}
 }
+
