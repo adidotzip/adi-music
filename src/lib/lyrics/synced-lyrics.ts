@@ -62,15 +62,16 @@ const getLyricsSyncMode = (
 	track: TrackData,
 	result: SyncedLyricsResult,
 ): LyricsSyncMode => {
-	if (result.status === 'found' && result.source === 'unison') {
-		return 'word'
+	const bpm = (track as { bpm?: number }).bpm
+
+	// 1. ABSOLUTE OVERRIDE: Line-only for very fast or very slow songs
+	if (bpm !== undefined && (bpm >= LINE_ONLY_BPM_THRESHOLD || bpm < SLOW_PACED_BPM_THRESHOLD)) {
+		return 'line'
 	}
 
-	const bpm = (track as { bpm?: number }).bpm
-	if (!bpm) return 'word'
-
-	if (bpm >= LINE_ONLY_BPM_THRESHOLD || bpm < SLOW_PACED_BPM_THRESHOLD) {
-		return 'line'
+	// 2. Unison always allows word-by-word for normal-paced songs
+	if (result.status === 'found' && result.source === 'unison') {
+		return 'word'
 	}
 
 	return 'word'
