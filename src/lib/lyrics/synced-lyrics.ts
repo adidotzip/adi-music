@@ -291,7 +291,7 @@ const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: S
 
 	if (Array.isArray(data.lyrics)) {
 		if (isLineSync) {
-			// STRICT LINE SYNC: Prevent interpolation
+			// STRICT LINE SYNC: Prevent word timeline interpolation entirely
 			const lines = data.lyrics
 				.map((line): SyncedLyricsLine | undefined => {
 					if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time)) return
@@ -312,12 +312,34 @@ const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: S
 			
 			return { lines: deduplicateLines(lines), syncType: 'line' }
 		} else {
-			// KARAOKE SYNC: Vocal-weighted interpolation for true 'word' type data
+			// WORD SYNC MODE: Map precise native timing profiles or gracefully fall back to interpolation
 			const lines = data.lyrics
 				.map((line): SyncedLyricsLine | undefined => {
 					if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time) || !isFiniteNumber(line.duration)) return
-					const wordsList = line.text.split(whitespacePattern).filter(Boolean)
 					
+					// 1. Check for native word-level mapping via 'syllabus' array
+					if (Array.isArray(line.syllabus)) {
+						const words = line.syllabus
+							.map((syl) => {
+								if (!isRecord(syl) || typeof syl.text !== 'string' || !isFiniteNumber(syl.time)) return null
+								return {
+									string: syl.text, // Contains native spacing spacing natively (e.g. "And ")
+									time: syl.time
+								}
+							})
+							.filter((w): w is SyncedLyricsWord => w !== null)
+
+						if (words.length > 0) {
+							return {
+								startTime: line.time,
+								endTime: line.time + line.duration,
+								words
+							}
+						}
+					}
+
+					// 2. Fallback to vocal-weighted interpolation if 'syllabus' isn't structural or populated
+					const wordsList = line.text.split(whitespacePattern).filter(Boolean)
 					const totalWeight = wordsList.reduce((sum, word) => sum + getWordWeight(word), 0) || 1
 					let currentWordTime = line.time
 					
