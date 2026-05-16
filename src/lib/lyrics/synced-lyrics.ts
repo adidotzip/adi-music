@@ -341,23 +341,38 @@ const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: S
 	return null
 }
 
-const fetchLyricsPlusLyrics = async (track: TrackData, signal: AbortSignal): Promise<{ lines: SyncedLyricsLine[]; syncType: LyricsSyncMode } | null> => {
-	try {
-		const url = new URL(LYRICSPLUS_LYRICS_ENDPOINT)
-		url.searchParams.set('title', track.name)
-		url.searchParams.set('artist', formatArtists(track.artists))
-		url.searchParams.set('source', 'apple')
+const fetchLyricsPlusLyrics = async (
+	track: TrackData,
+	signal: AbortSignal
+): Promise<{ lines: SyncedLyricsLine[]; syncType: LyricsSyncMode } | null> => {
+	const sources = ['apple', 'musixmatch']
 
-		const maybeIsrc = (track as { isrc?: unknown }).isrc
-		if (typeof maybeIsrc === 'string' && maybeIsrc.trim()) url.searchParams.set('isrc', maybeIsrc)
+	for (const source of sources) {
+		try {
+			const url = new URL(LYRICSPLUS_LYRICS_ENDPOINT)
+			url.searchParams.set('title', track.name)
+			url.searchParams.set('artist', formatArtists(track.artists))
+			url.searchParams.set('source', source)
 
-		const response = await fetch(url, { signal })
-		if (!response.ok) return null
-		return getLyricsPlusResult(await response.json(), getDurationSeconds(track))
-	} catch (error) {
-		if (error instanceof Error && error.name === 'AbortError') throw error
-		return null
+			const maybeIsrc = (track as { isrc?: unknown }).isrc
+			if (typeof maybeIsrc === 'string' && maybeIsrc.trim()) {
+				url.searchParams.set('isrc', maybeIsrc)
+			}
+
+			const response = await fetch(url, { signal })
+			if (!response.ok) continue
+
+			const result = getLyricsPlusResult(await response.json(), getDurationSeconds(track))
+			if (result && result.lines.length > 0) {
+				return result
+			}
+		} catch (error) {
+			if (error instanceof Error && error.name === 'AbortError') throw error
+			// If it's a structural or network error, let it gracefully fall through to musixmatch
+		}
 	}
+
+	return null
 }
 
 const fetchLrclibExactLyrics = async (track: TrackData, durationSeconds: number, signal: AbortSignal): Promise<SyncedLyricsResult> => {
@@ -496,7 +511,7 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 			result = await fetchUnisonLyrics(track, signal)
 		}
 
-		// 3. LyricsPlus
+		// 3. LyricsPlus (Attempts Apple, then Musixmatch if empty/fails)
 		if (result.status !== 'found' && result.status !== 'instrumental') {
 			const lyricsPlusData = await fetchLyricsPlusLyrics(track, signal)
 			if (lyricsPlusData && lyricsPlusData.lines.length > 0) {
