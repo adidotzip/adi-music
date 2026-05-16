@@ -258,41 +258,21 @@ const scoreLrclibSearchResult = (data: LrclibLyricsResponse, track: TrackData, d
 const getWordWeight = (word: string): number => {
 	const clean = word.toLowerCase()
 	
-	// Measure the pure text weight, ignoring punctuation marks
 	const pureText = clean.replace(/[^a-z0-9]/g, '')
 	let weight = pureText.length
 
-	// Stretch vowels harder
 	const vowelMatches = clean.match(/[aeiouy]/g)
-	if (vowelMatches) {
-		weight += vowelMatches.length * 1.8
-	}
+	if (vowelMatches) weight += vowelMatches.length * 1.8
 
-	// Repeated vowels = even longer sustain
 	const repeatedVowels = clean.match(/([aeiouy])\1+/g)
-	if (repeatedVowels) {
-		weight += repeatedVowels.length * 3
-	}
+	if (repeatedVowels) weight += repeatedVowels.length * 3
 
-	// Common sustained endings
-	if (/(ay|ee|oo|ah|oh|uh)[^a-z0-9]*$/i.test(clean)) {
-		weight += 2
-	}
+	if (/(ay|ee|oo|ah|oh|uh)[^a-z0-9]*$/i.test(clean)) weight += 2
 
-	// Tiny connector words shouldn't dominate timing
-	if (/^(a|an|the|to|of|in|on|at|it)$/i.test(pureText)) {
-		weight *= 0.6
-	}
+	if (/^(a|an|the|to|of|in|on|at|it)$/i.test(pureText)) weight *= 0.6
 
-	// --- NATURAL BREATH / PAUSE TIMING ---
-	// Commas signal a natural breath/pause in the vocal delivery
-	if (/,$/.test(clean)) {
-		weight += 4 // Adds significant buffer time before the next word starts
-	}
-	// Full stops, question marks, and exclamation marks imply a harder stop
-	else if (/[.!?;]$/.test(clean)) {
-		weight += 5 
-	}
+	if (/,$/.test(clean)) weight += 4 
+	else if (/[.!?;]$/.test(clean)) weight += 5 
 
 	return Math.max(weight, 1)
 }
@@ -300,42 +280,70 @@ const getWordWeight = (word: string): number => {
 const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: SyncedLyricsLine[]; syncType: LyricsSyncMode } | null => {
 	if (!isRecord(data)) return null
 
+	// Explicit API type detection ('Line' or 'Word')
+	const syncTypeRaw = typeof data.type === 'string' ? data.type.toLowerCase() : ''
+	const isLineSync = syncTypeRaw === 'line'
+
 	if (Array.isArray(data.lines)) {
 		const lines = data.lines.map(normalizeLine).filter((line): line is SyncedLyricsLine => !!line)
-		return { lines: deduplicateLines(lines), syncType: 'karaoke' }
+		return { lines: deduplicateLines(lines), syncType: isLineSync ? 'line' : 'karaoke' }
 	}
 
 	if (Array.isArray(data.lyrics)) {
-		// Vocal-weighted interpolation for natural feeling karaoke
-		const lines = data.lyrics
-			.map((line): SyncedLyricsLine | undefined => {
-				if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time) || !isFiniteNumber(line.duration)) return
-				const wordsList = line.text.split(whitespacePattern).filter(Boolean)
-				
-				const totalWeight = wordsList.reduce((sum, word) => sum + getWordWeight(word), 0) || 1
-				let currentWordTime = line.time
-				
-				return {
-					startTime: line.time,
-					endTime: line.time + line.duration,
-					words: wordsList.map((word, i) => {
-						const timeShare = (getWordWeight(word) / totalWeight) * line.duration
-						const wordTimestamp = currentWordTime
-						currentWordTime += timeShare
-						return {
+		if (isLineSync) {
+			// STRICT LINE SYNC: Prevent interpolation
+			const lines = data.lyrics
+				.map((line): SyncedLyricsLine | undefined => {
+					if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time)) return
+					
+					const duration = isFiniteNumber(line.duration) ? line.duration : 2000
+					const wordsList = line.text.split(whitespacePattern).filter(Boolean)
+					
+					return {
+						startTime: line.time,
+						endTime: line.time + duration,
+						words: wordsList.map((word, i) => ({
 							string: word + (i === wordsList.length - 1 ? '' : ' '),
-							time: wordTimestamp, 
-						}
-					}),
-				}
-			})
-			.filter((line): line is SyncedLyricsLine => !!line)
-		
-		return { lines: deduplicateLines(lines), syncType: 'karaoke' }
+							time: line.time, 
+						})),
+					}
+				})
+				.filter((line): line is SyncedLyricsLine => !!line)
+			
+			return { lines: deduplicateLines(lines), syncType: 'line' }
+		} else {
+			// KARAOKE SYNC: Vocal-weighted interpolation for true 'word' type data
+			const lines = data.lyrics
+				.map((line): SyncedLyricsLine | undefined => {
+					if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time) || !isFiniteNumber(line.duration)) return
+					const wordsList = line.text.split(whitespacePattern).filter(Boolean)
+					
+					const totalWeight = wordsList.reduce((sum, word) => sum + getWordWeight(word), 0) || 1
+					let currentWordTime = line.time
+					
+					return {
+						startTime: line.time,
+						endTime: line.time + line.duration,
+						words: wordsList.map((word, i) => {
+							const timeShare = (getWordWeight(word) / totalWeight) * line.duration
+							const wordTimestamp = currentWordTime
+							currentWordTime += timeShare
+							return {
+								string: word + (i === wordsList.length - 1 ? '' : ' '),
+								time: wordTimestamp, 
+							}
+						}),
+					}
+				})
+				.filter((line): line is SyncedLyricsLine => !!line)
+			
+			return { lines: deduplicateLines(lines), syncType: 'karaoke' }
+		}
 	}
 
 	const lyricsText = typeof data.syncedLyrics === 'string' ? data.syncedLyrics : typeof data.lyrics === 'string' ? data.lyrics : null
 	if (lyricsText) return { lines: parseLrc(lyricsText, durationSeconds * 1000), syncType: 'line' }
+	
 	if (isRecord(data.data)) return getLyricsPlusResult(data.data, durationSeconds)
 
 	return null
@@ -368,7 +376,6 @@ const fetchLyricsPlusLyrics = async (
 			}
 		} catch (error) {
 			if (error instanceof Error && error.name === 'AbortError') throw error
-			// If it's a structural or network error, let it gracefully fall through to musixmatch
 		}
 	}
 
@@ -464,7 +471,6 @@ const getLyricsFromCache = async (trackId: number): Promise<SyncedLyricsResult |
 		const db = await getDatabase()
 		const cached = await db.get('lyrics', trackId)
 		
-		// Guard against old, incompatible caches
 		if (!cached || cached.version !== CACHE_VERSION || Date.now() - cached.cachedAt > CACHE_TTL_MS) {
 			return undefined
 		}
@@ -503,7 +509,7 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 		const bpm = (track as { bpm?: number }).bpm
 		const isSlow = bpm !== undefined && bpm < SLOW_PACED_BPM_THRESHOLD
 
-		// 1. LyricsPlus (Main Source - check this first for everything)
+		// 1. LyricsPlus (Main Source)
 		const lyricsPlusData = await fetchLyricsPlusLyrics(track, signal)
 		if (lyricsPlusData && lyricsPlusData.lines.length > 0) {
 			result = {
@@ -514,7 +520,7 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 			}
 		}
 
-		// 2. Slow songs specific fallback: check LRCLIB first
+		// 2. Slow songs specific fallback: LRCLIB
 		if (isSlow && result.status !== 'found' && result.status !== 'instrumental') {
 			result = await fetchLrclibLyrics(track, signal)
 		}
@@ -524,7 +530,7 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 			result = await fetchUnisonLyrics(track, signal)
 		}
 
-		// 4. Normal-paced general fallback: check LRCLIB
+		// 4. Normal-paced general fallback: LRCLIB
 		if (!isSlow && result.status !== 'found' && result.status !== 'instrumental') {
 			result = await fetchLrclibLyrics(track, signal)
 		}
