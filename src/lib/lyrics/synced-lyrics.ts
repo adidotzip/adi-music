@@ -77,6 +77,9 @@ const getLyricsSyncMode = (
 	return 'word'
 }
 
+// Only needed for TTML/real word-timed sources that need BPM flattening.
+// parseLrc() already outputs honest line-sync (all words share startTime),
+// so this is never called on LRC-sourced lines.
 const convertToLineOnly = (
 	lines: SyncedLyricsLine[],
 ): SyncedLyricsLine[] => {
@@ -112,6 +115,9 @@ const parseTimestamp = (minutes: string, seconds: string, fraction: string | und
 	return Number.parseInt(minutes, 10) * 60_000 + Number.parseInt(seconds, 10) * 1000 + Number.parseInt(msString, 10)
 }
 
+// FIX: All words in an LRC line share the line's startTime.
+// LRC is inherently line-synced — manufacturing staggered word timings
+// caused the renderer to treat plain lyrics as karaoke.
 export const parseLrc = (lyrics: string, durationMs: number): SyncedLyricsLine[] => {
 	const timestampedLines = lyrics
 		.split('\n')
@@ -131,15 +137,13 @@ export const parseLrc = (lyrics: string, durationMs: number): SyncedLyricsLine[]
 		const nextLine = timestampedLines[index + 1]
 		const endTime = nextLine ? nextLine.startTime : Math.max(durationMs, line.startTime + 2000)
 		const wordsList = line.text.split(whitespacePattern).filter(Boolean)
-		const totalDuration = endTime - line.startTime
-		const wordDuration = totalDuration / (wordsList.length || 1)
 
 		return {
 			startTime: line.startTime,
 			endTime,
 			words: wordsList.map((word, i) => ({
 				string: word + (i === wordsList.length - 1 ? '' : ' '),
-				time: Math.round(line.startTime + i * wordDuration),
+				time: line.startTime, // all words share the line timestamp — no fake karaoke
 			})),
 		}
 	})
@@ -181,7 +185,7 @@ export const parseTtml = (ttml: string): SyncedLyricsLine[] => {
 }
 
 const normalizeSearchText = (value: string): string =>
-	value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/['’]/g, '').replace(/&/g, ' and ').replace(/\b(feat|ft|featuring)\.?\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
+	value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/['']/g, '').replace(/&/g, ' and ').replace(/\b(feat|ft|featuring)\.?\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
 
 const getDurationSeconds = (track: TrackData): number => Math.round(track.duration)
 
@@ -241,28 +245,29 @@ const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: S
 	}
 
 	if (Array.isArray(data.lyrics)) {
+		// FIX: Use line.time for all words instead of interpolating fake word timings.
+		// This branch handles plain line-synced responses from LyricsPlus.
 		const lines = data.lyrics
 			.map((line): SyncedLyricsLine | undefined => {
 				if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time) || !isFiniteNumber(line.duration)) return
 				const wordsList = line.text.split(whitespacePattern).filter(Boolean)
-				const wordDuration = line.duration / (wordsList.length || 1)
 				return {
 					startTime: line.time,
 					endTime: line.time + line.duration,
 					words: wordsList.map((word, i) => ({
 						string: word + (i === wordsList.length - 1 ? '' : ' '),
-						time: Math.round(line.time + i * wordDuration),
+						time: line.time, // all words share the line timestamp — no fake karaoke
 					})),
 				}
 			})
 			.filter((line): line is SyncedLyricsLine => !!line)
-		return { lines, syncType: 'word' }
+		return { lines, syncType: 'line' }
 	}
 
 	const lyricsText = typeof data.syncedLyrics === 'string' ? data.syncedLyrics : typeof data.lyrics === 'string' ? data.lyrics : null
 	if (lyricsText) return { lines: parseLrc(lyricsText, durationSeconds * 1000), syncType: 'line' }
 	if (isRecord(data.data)) return getLyricsPlusResult(data.data, durationSeconds)
-	
+
 	return null
 }
 
@@ -393,7 +398,8 @@ const saveLyricsToCache = async (trackId: number, data: SyncedLyricsResult) => {
 export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): Promise<SyncedLyricsResult> => {
 	let cachedResult = await getLyricsFromCache(track.id)
 
-	// Force the sync mode rules on cached results to prevent old bad data from persisting!
+	// Re-apply sync mode rules on cached results to prevent stale data from persisting.
+	// convertToLineOnly() is still necessary here for cached TTML results that need BPM flattening.
 	if (cachedResult && cachedResult.status === 'found') {
 		const targetSyncMode = getLyricsSyncMode(track, cachedResult)
 		if (targetSyncMode === 'line' && cachedResult.syncType !== 'line') {
@@ -412,15 +418,15 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 		const bpm = (track as { bpm?: number }).bpm
 		const isSlow = bpm !== undefined && bpm < SLOW_PACED_BPM_THRESHOLD
 
-		// 1. Slow check LRCLIB
+		// 1. Slow songs: check LRCLIB first
 		if (isSlow) result = await fetchLrclibLyrics(track, signal)
 
-		// 2. Unison (Main)
+		// 2. Unison (main source)
 		if (result.status !== 'found' && result.status !== 'instrumental') {
 			result = await fetchUnisonLyrics(track, signal)
 		}
 
-		// 3. Lyrics+
+		// 3. LyricsPlus
 		if (result.status !== 'found' && result.status !== 'instrumental') {
 			const lyricsPlusData = await fetchLyricsPlusLyrics(track, signal)
 			if (lyricsPlusData && lyricsPlusData.lines.length > 0) {
@@ -433,12 +439,13 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 			}
 		}
 
-		// 4. Fallback LRCLIB
+		// 4. Fallback LRCLIB (normal-paced songs only)
 		if (!isSlow && result.status !== 'found' && result.status !== 'instrumental') {
 			result = await fetchLrclibLyrics(track, signal)
 		}
 
-		// Adaptive sync mode override
+		// Adaptive sync mode override — only meaningful for real word-timed sources (TTML).
+		// LRC-sourced results already have syncType: 'line' and uniform word timestamps.
 		if (result.status === 'found') {
 			const targetSyncMode = getLyricsSyncMode(track, result)
 			if (targetSyncMode === 'line' && result.syncType !== 'line') {
