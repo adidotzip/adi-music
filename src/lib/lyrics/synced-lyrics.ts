@@ -168,8 +168,11 @@ export const parseTtml = (ttml: string): SyncedLyricsLine[] => {
 		const content = pMatch[3]
 
 		const words: SyncedLyricsWord[] = []
-		let spanMatch: RegExpExecArray | null
-		while ((spanMatch = spanPattern.exec(content)) !== null) {
+		
+		// Use matchAll to safely extract spans without carrying over lastIndex state
+		const spanMatches = [...content.matchAll(spanPattern)]
+		
+		for (const spanMatch of spanMatches) {
 			words.push({
 				string: spanMatch[3].replace(/<[^>]*>/g, '').trim() + ' ',
 				time: parseTime(spanMatch[1]),
