@@ -14,7 +14,7 @@ const LRCLIB_DURATION_TOLERANCE_SECONDS = 4
 const SLOW_PACED_BPM_THRESHOLD = 80
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7
-const CACHE_VERSION = 3 // Bumped to invalidate old caches and apply punctuation pauses
+const CACHE_VERSION = 9 // Bumped to invalidate old caches and apply punctuation pauses
 
 export interface SyncedLyricsWord {
 	string: string
