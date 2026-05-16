@@ -14,7 +14,7 @@ const LRCLIB_DURATION_TOLERANCE_SECONDS = 4
 const SLOW_PACED_BPM_THRESHOLD = 80
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7
-const CACHE_VERSION = 2 // Bumped to invalidate old character-length timing caches
+const CACHE_VERSION = 3 // Bumped to invalidate old caches and apply punctuation pauses
 
 export interface SyncedLyricsWord {
 	string: string
@@ -257,9 +257,10 @@ const scoreLrclibSearchResult = (data: LrclibLyricsResponse, track: TrackData, d
 
 const getWordWeight = (word: string): number => {
 	const clean = word.toLowerCase()
-
-	// Base visual length
-	let weight = clean.length
+	
+	// Measure the pure text weight, ignoring punctuation marks
+	const pureText = clean.replace(/[^a-z0-9]/g, '')
+	let weight = pureText.length
 
 	// Stretch vowels harder
 	const vowelMatches = clean.match(/[aeiouy]/g)
@@ -274,13 +275,23 @@ const getWordWeight = (word: string): number => {
 	}
 
 	// Common sustained endings
-	if (/(ay|ee|oo|ah|oh|uh)$/i.test(clean)) {
+	if (/(ay|ee|oo|ah|oh|uh)[^a-z0-9]*$/i.test(clean)) {
 		weight += 2
 	}
 
 	// Tiny connector words shouldn't dominate timing
-	if (/^(a|an|the|to|of|in|on|at|it)$/i.test(clean)) {
+	if (/^(a|an|the|to|of|in|on|at|it)$/i.test(pureText)) {
 		weight *= 0.6
+	}
+
+	// --- NATURAL BREATH / PAUSE TIMING ---
+	// Commas signal a natural breath/pause in the vocal delivery
+	if (/,$/.test(clean)) {
+		weight += 4 // Adds significant buffer time before the next word starts
+	}
+	// Full stops, question marks, and exclamation marks imply a harder stop
+	else if (/[.!?;]$/.test(clean)) {
+		weight += 5 
 	}
 
 	return Math.max(weight, 1)
