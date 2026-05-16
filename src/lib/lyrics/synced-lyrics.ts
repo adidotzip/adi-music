@@ -12,7 +12,6 @@ const UNISON_GET_ENDPOINT = 'https://unison.boidu.dev/lyrics'
 
 const LRCLIB_DURATION_TOLERANCE_SECONDS = 4
 
-const LINE_ONLY_BPM_THRESHOLD = 140
 const SLOW_PACED_BPM_THRESHOLD = 80
 
 export interface SyncedLyricsWord {
@@ -64,16 +63,14 @@ const getLyricsSyncMode = (
 ): LyricsSyncMode => {
 	const bpm = (track as { bpm?: number }).bpm
 
-	// 1. ABSOLUTE OVERRIDE: Line-only for very fast or very slow songs
-	if (bpm !== undefined && (bpm >= LINE_ONLY_BPM_THRESHOLD || bpm < SLOW_PACED_BPM_THRESHOLD)) {
+	// 1. ABSOLUTE OVERRIDE: Line-only for slow songs
+	if (bpm !== undefined && bpm < SLOW_PACED_BPM_THRESHOLD) {
 		return 'line'
 	}
 
-	// 2. Unison always allows word-by-word for normal-paced songs
-	if (result.status === 'found' && result.source === 'unison') {
-		return 'word'
-	}
-
+	// 2. Normal and Fast songs default to word-by-word
+	// Unison and LyricsPlus (TTML) will use 'word'. 
+	// LRC sources will naturally stay 'line' because they lack word data.
 	return 'word'
 }
 
@@ -168,11 +165,8 @@ export const parseTtml = (ttml: string): SyncedLyricsLine[] => {
 		const content = pMatch[3]
 
 		const words: SyncedLyricsWord[] = []
-		
-		// Use matchAll to safely extract spans without carrying over lastIndex state
-		const spanMatches = [...content.matchAll(spanPattern)]
-		
-		for (const spanMatch of spanMatches) {
+		let spanMatch: RegExpExecArray | null
+		while ((spanMatch = spanPattern.exec(content)) !== null) {
 			words.push({
 				string: spanMatch[3].replace(/<[^>]*>/g, '').trim() + ' ',
 				time: parseTime(spanMatch[1]),
