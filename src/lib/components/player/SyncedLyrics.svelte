@@ -340,47 +340,15 @@
 							{:else}
 								{#if primaryWords.length > 0}
 									<div class="primary-lyrics-block">
-										{#each primaryWords as word}
-											<!-- Removed the trim() check so we don't accidentally erase valid spaces -->
-											{#if word.string.length > 0}
-												{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}
-												{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}
-												{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}
-												{@const duration = Math.max(nextTime - word.time, 1)}
-												{@const wordProgress = isLinePast ? 100 : (isCurrentWord 
-													? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 
-													: isPastWord ? 100 : 0)}
-
-												<span
-													class="lyric-word"
-													class:is-sung={isPastWord || isCurrentWord}
-													style="--word-progress: {wordProgress}%"
-												>{word.string}</span>
-											{/if}
-										{/each}
+										<!-- Removing any linebreaks/whitespace between spans to ensure strict concatenation -->
+										{#each primaryWords as word}{#if word.string.length > 0}{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}{@const duration = Math.max(nextTime - word.time, 1)}{@const wordProgress = isLinePast ? 100 : (isCurrentWord ? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 : isPastWord ? 100 : 0)}<span class="lyric-word" class:is-sung={isPastWord || isCurrentWord} style="--word-progress: {wordProgress}%">{word.string}</span>{/if}{/each}
 									</div>
 								{/if}
 
 								{#if secondaryWords.length > 0}
 									<div class="secondary-lyrics-block">
-										{#each secondaryWords as word}
-											<!-- Removed the trim() check so we don't accidentally erase valid spaces -->
-											{#if word.string.length > 0}
-												{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}
-												{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}
-												{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}
-												{@const duration = Math.max(nextTime - word.time, 1)}
-												{@const wordProgress = isLinePast ? 100 : (isCurrentWord 
-													? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 
-													: isPastWord ? 100 : 0)}
-
-												<span
-													class="lyric-word secondary-word"
-													class:is-sung={isPastWord || isCurrentWord}
-													style="--word-progress: {wordProgress}%"
-												>{word.string}</span>
-											{/if}
-										{/each}
+										<!-- Removing any linebreaks/whitespace between spans to ensure strict concatenation -->
+										{#each secondaryWords as word}{#if word.string.length > 0}{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}{@const duration = Math.max(nextTime - word.time, 1)}{@const wordProgress = isLinePast ? 100 : (isCurrentWord ? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 : isPastWord ? 100 : 0)}<span class="lyric-word secondary-word" class:is-sung={isPastWord || isCurrentWord} style="--word-progress: {wordProgress}%">{word.string}</span>{/if}{/each}
 									</div>
 								{/if}
 							{/if}
@@ -504,18 +472,12 @@
 	}
 
 	.lyric-word {
-		display: inline-block;
+		/* Switched from inline-block to inline to restore kerning and prevent box-breaking */
+		display: inline;
 		position: relative;
-		/* Enforce pre-wrap to ensure strict whitespace rendering for trailing spaces on inline-blocks */
 		white-space: pre-wrap;
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
-		transform: translateY(0);
-		transition: transform 0.25s ease-out;
-	}
-
-	.lyric-line.active .lyric-word.is-sung {
-		transform: translateY(-2px);
 	}
 
 	.lyric-line.active .lyric-word {
