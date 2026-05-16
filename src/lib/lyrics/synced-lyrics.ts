@@ -112,9 +112,6 @@ const parseTimestamp = (minutes: string, seconds: string, fraction: string | und
 	return Number.parseInt(minutes, 10) * 60_000 + Number.parseInt(seconds, 10) * 1000 + Number.parseInt(msString, 10)
 }
 
-// FIX: All words in an LRC line share the line's startTime.
-// LRC is inherently line-synced — manufacturing staggered word timings
-// caused the renderer to treat plain lyrics as karaoke.
 export const parseLrc = (lyrics: string, durationMs: number): SyncedLyricsLine[] => {
 	const timestampedLines = lyrics
 		.split('\n')
@@ -242,23 +239,29 @@ const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: S
 	}
 
 	if (Array.isArray(data.lyrics)) {
-		// FIX: Use line.time for all words instead of interpolating fake word timings.
-		// This branch handles plain line-synced responses from LyricsPlus.
+		// FIX: Interpolate word timings dynamically based on the line duration
+		// to allow LyricsPlus to render as word-by-word karaoke.
 		const lines = data.lyrics
 			.map((line): SyncedLyricsLine | undefined => {
 				if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time) || !isFiniteNumber(line.duration)) return
 				const wordsList = line.text.split(whitespacePattern).filter(Boolean)
+				
+				// Calculate how long each word gets based on total line duration
+				const timePerWord = line.duration / (wordsList.length || 1)
+				
 				return {
 					startTime: line.time,
 					endTime: line.time + line.duration,
 					words: wordsList.map((word, i) => ({
 						string: word + (i === wordsList.length - 1 ? '' : ' '),
-						time: line.time, // all words share the line timestamp — no fake karaoke
+						time: line.time + (i * timePerWord), // Stagger timestamps for word-by-word sync
 					})),
 				}
 			})
 			.filter((line): line is SyncedLyricsLine => !!line)
-		return { lines, syncType: 'line' }
+		
+		// Return 'word' instead of 'line'
+		return { lines, syncType: 'word' }
 	}
 
 	const lyricsText = typeof data.syncedLyrics === 'string' ? data.syncedLyrics : typeof data.lyrics === 'string' ? data.lyrics : null
