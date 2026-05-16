@@ -97,7 +97,7 @@
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
 	
-	// Backend explicitly handles the mode now. No more frontend heuristics.
+	// Backend is now the single source of truth for sync mode.
 	const syncType = $derived(foundResult?.syncType ?? 'line')
 	const isLineLevel = $derived(syncType === 'line')
 
@@ -319,12 +319,24 @@
 							}}
 						>
 							{#if isLineLevel}
-								<div class="primary-lyrics-block">
-									<span
-										class="lyric-word is-sung"
-										style="--word-progress: 100%"
-									>{item.words.map(w => w.string).join('')}</span>
-								</div>
+								{#if primaryWords.length > 0}
+									<div class="primary-lyrics-block">
+										<span 
+											class="lyric-word" 
+											class:is-sung={isActiveLine || isLinePast} 
+											style="--word-progress: {isActiveLine || isLinePast ? 100 : 0}%"
+										>{primaryWords.map(w => w.string).join('')}</span>
+									</div>
+								{/if}
+								{#if secondaryWords.length > 0}
+									<div class="secondary-lyrics-block">
+										<span 
+											class="lyric-word secondary-word" 
+											class:is-sung={isActiveLine || isLinePast} 
+											style="--word-progress: {isActiveLine || isLinePast ? 100 : 0}%"
+										>{secondaryWords.map(w => w.string).join('')}</span>
+									</div>
+								{/if}
 							{:else}
 								{#if primaryWords.length > 0}
 									<div class="primary-lyrics-block">
