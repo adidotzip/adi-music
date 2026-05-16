@@ -391,8 +391,20 @@ const saveLyricsToCache = async (trackId: number, data: SyncedLyricsResult) => {
 }
 
 export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): Promise<SyncedLyricsResult> => {
-	const cachedResult = await getLyricsFromCache(track.id)
-	if (cachedResult) return cachedResult
+	let cachedResult = await getLyricsFromCache(track.id)
+
+	// Force the sync mode rules on cached results to prevent old bad data from persisting!
+	if (cachedResult && cachedResult.status === 'found') {
+		const targetSyncMode = getLyricsSyncMode(track, cachedResult)
+		if (targetSyncMode === 'line' && cachedResult.syncType !== 'line') {
+			cachedResult = {
+				...cachedResult,
+				syncType: 'line',
+				lines: convertToLineOnly(cachedResult.lines),
+			}
+		}
+		return cachedResult
+	}
 
 	try {
 		let result: SyncedLyricsResult = { status: 'not-found' }
@@ -429,12 +441,14 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 		// Adaptive sync mode override
 		if (result.status === 'found') {
 			const targetSyncMode = getLyricsSyncMode(track, result)
-			if (targetSyncMode === 'line' && result.syncType === 'word') {
+			if (targetSyncMode === 'line' && result.syncType !== 'line') {
 				result = {
 					...result,
 					syncType: 'line',
 					lines: convertToLineOnly(result.lines),
 				}
+			} else if (!result.syncType) {
+				result.syncType = targetSyncMode
 			}
 		}
 
