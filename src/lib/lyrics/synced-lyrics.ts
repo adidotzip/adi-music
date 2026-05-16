@@ -11,8 +11,10 @@ const LRCLIB_SEARCH_ENDPOINT = 'https://lrclib.net/api/search'
 const UNISON_GET_ENDPOINT = 'https://unison.boidu.dev/lyrics'
 
 const LRCLIB_DURATION_TOLERANCE_SECONDS = 4
-
 const SLOW_PACED_BPM_THRESHOLD = 80
+
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7
+const CACHE_VERSION = 1 // Bump when parser logic/schema changes
 
 export interface SyncedLyricsWord {
 	string: string
@@ -27,7 +29,7 @@ export interface SyncedLyricsLine {
 
 export type SyncedLyricsSource = 'lyricsplus' | 'lrclib' | 'unison'
 
-export type LyricsSyncMode = 'word' | 'line'
+export type LyricsSyncMode = 'karaoke' | 'line'
 
 export type SyncedLyricsResult =
 	| {
@@ -51,11 +53,30 @@ interface LrclibLyricsResponse {
 	syncedLyrics?: string | null
 }
 
+interface UnisonLyricsResponse {
+	success: boolean
+	data?: {
+		lyrics?: string
+	}
+}
+
 const isRecord = (value: unknown): value is UnknownRecord =>
 	typeof value === 'object' && value !== null
 
 const isFiniteNumber = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isFinite(value)
+
+const deduplicateLines = (lines: SyncedLyricsLine[]): SyncedLyricsLine[] => {
+	return lines.filter((line, index, arr) => {
+		if (index === 0) return true
+		const prevLine = arr[index - 1]
+		// Drop if it starts at the exact same time and has the identical starting word
+		return !(
+			line.startTime === prevLine.startTime &&
+			line.words[0]?.string === prevLine.words[0]?.string
+		)
+	})
+}
 
 const getLyricsSyncMode = (
 	track: TrackData,
@@ -63,20 +84,15 @@ const getLyricsSyncMode = (
 ): LyricsSyncMode => {
 	const bpm = (track as { bpm?: number }).bpm
 
-	// 1. ABSOLUTE OVERRIDE: Line-only for slow songs
+	// ABSOLUTE OVERRIDE: Line-only for slow songs (prevents jittery karaoke on emotional tracks)
 	if (bpm !== undefined && bpm < SLOW_PACED_BPM_THRESHOLD) {
 		return 'line'
 	}
 
-	// 2. Normal and Fast songs default to word-by-word
-	// Unison and LyricsPlus (TTML) will use 'word'. 
-	// LRC sources will naturally stay 'line' because they lack word data.
-	return 'word'
+	return 'karaoke'
 }
 
-// Only needed for TTML/real word-timed sources that need BPM flattening.
-// parseLrc() already outputs honest line-sync (all words share startTime),
-// so this is never called on LRC-sourced lines.
+// Only needed for real word-timed sources that need BPM flattening.
 const convertToLineOnly = (
 	lines: SyncedLyricsLine[],
 ): SyncedLyricsLine[] => {
@@ -127,7 +143,7 @@ export const parseLrc = (lyrics: string, durationMs: number): SyncedLyricsLine[]
 		})
 		.sort((a, b) => a.startTime - b.startTime)
 
-	return timestampedLines.map((line, index) => {
+	const lines = timestampedLines.map((line, index) => {
 		const nextLine = timestampedLines[index + 1]
 		const endTime = nextLine ? nextLine.startTime : Math.max(durationMs, line.startTime + 2000)
 		const wordsList = line.text.split(whitespacePattern).filter(Boolean)
@@ -141,41 +157,50 @@ export const parseLrc = (lyrics: string, durationMs: number): SyncedLyricsLine[]
 			})),
 		}
 	})
+
+	return deduplicateLines(lines)
 }
 
 export const parseTtml = (ttml: string): SyncedLyricsLine[] => {
 	const lines: SyncedLyricsLine[] = []
-	const pPattern = /<p[^>]*begin="([^"]+)"[^>]*end="([^"]+)"[^>]*>([\s\S]*?)<\/p>/gi
-	const spanPattern = /<span[^>]*begin="([^"]+)"[^>]*end="([^"]+)"[^>]*>([\s\S]*?)<\/span>/gi
+	const parser = new DOMParser()
+	const doc = parser.parseFromString(ttml, 'text/xml')
 
-	const parseTime = (timeStr: string): number => {
+	const parseTime = (timeStr: string | null): number => {
+		if (!timeStr) return 0
 		const parts = timeStr.split(':')
 		if (parts.length === 3) return ((Number.parseInt(parts[0], 10) * 3600 + Number.parseInt(parts[1], 10) * 60 + Number.parseFloat(parts[2])) * 1000)
 		if (parts.length === 2) return ((Number.parseInt(parts[0], 10) * 60 + Number.parseFloat(parts[1])) * 1000)
 		return Number.parseFloat(timeStr) * 1000
 	}
 
-	let pMatch: RegExpExecArray | null
-	while ((pMatch = pPattern.exec(ttml)) !== null) {
-		const startTime = parseTime(pMatch[1])
-		const endTime = parseTime(pMatch[2])
-		const content = pMatch[3]
-
+	const paragraphs = doc.querySelectorAll('p')
+	paragraphs.forEach((p) => {
+		const startTime = parseTime(p.getAttribute('begin'))
+		const endTime = parseTime(p.getAttribute('end'))
+		const spans = p.querySelectorAll('span')
 		const words: SyncedLyricsWord[] = []
-		let spanMatch: RegExpExecArray | null
-		while ((spanMatch = spanPattern.exec(content)) !== null) {
-			words.push({
-				string: spanMatch[3].replace(/<[^>]*>/g, '').trim() + ' ',
-				time: parseTime(spanMatch[1]),
+
+		if (spans.length > 0) {
+			spans.forEach((span) => {
+				words.push({
+					string: (span.textContent || '').trim() + ' ',
+					time: parseTime(span.getAttribute('begin'))
+				})
 			})
+		} else {
+			const content = p.textContent || ''
+			if (content.trim()) {
+				words.push({ string: content.trim(), time: startTime })
+			}
 		}
 
-		if (words.length === 0) {
-			words.push({ string: content.replace(/<[^>]*>/g, '').trim(), time: startTime })
+		if (words.length > 0) {
+			lines.push({ startTime, endTime, words })
 		}
-		lines.push({ startTime, endTime, words })
-	}
-	return lines
+	})
+
+	return deduplicateLines(lines)
 }
 
 const normalizeSearchText = (value: string): string =>
@@ -235,33 +260,36 @@ const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: S
 
 	if (Array.isArray(data.lines)) {
 		const lines = data.lines.map(normalizeLine).filter((line): line is SyncedLyricsLine => !!line)
-		return { lines, syncType: 'word' }
+		return { lines: deduplicateLines(lines), syncType: 'karaoke' }
 	}
 
 	if (Array.isArray(data.lyrics)) {
-		// FIX: Interpolate word timings dynamically based on the line duration
-		// to allow LyricsPlus to render as word-by-word karaoke.
+		// Character-weighted interpolation for natural feeling karaoke
 		const lines = data.lyrics
 			.map((line): SyncedLyricsLine | undefined => {
 				if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time) || !isFiniteNumber(line.duration)) return
 				const wordsList = line.text.split(whitespacePattern).filter(Boolean)
 				
-				// Calculate how long each word gets based on total line duration
-				const timePerWord = line.duration / (wordsList.length || 1)
+				const totalChars = wordsList.reduce((sum, word) => sum + word.length, 0) || 1
+				let currentWordTime = line.time
 				
 				return {
 					startTime: line.time,
 					endTime: line.time + line.duration,
-					words: wordsList.map((word, i) => ({
-						string: word + (i === wordsList.length - 1 ? '' : ' '),
-						time: line.time + (i * timePerWord), // Stagger timestamps for word-by-word sync
-					})),
+					words: wordsList.map((word, i) => {
+						const timeShare = (word.length / totalChars) * line.duration
+						const wordTimestamp = currentWordTime
+						currentWordTime += timeShare
+						return {
+							string: word + (i === wordsList.length - 1 ? '' : ' '),
+							time: wordTimestamp, 
+						}
+					}),
 				}
 			})
 			.filter((line): line is SyncedLyricsLine => !!line)
 		
-		// Return 'word' instead of 'line'
-		return { lines, syncType: 'word' }
+		return { lines: deduplicateLines(lines), syncType: 'karaoke' }
 	}
 
 	const lyricsText = typeof data.syncedLyrics === 'string' ? data.syncedLyrics : typeof data.lyrics === 'string' ? data.lyrics : null
@@ -352,22 +380,21 @@ const fetchUnisonLyrics = async (track: TrackData, signal: AbortSignal): Promise
 		const response = await fetch(url, { signal })
 		if (!response.ok) return { status: 'not-found' }
 
-		const data: any = await response.json()
-		if (!data.success || !data.data) return { status: 'not-found' }
+		const payload = (await response.json()) as UnisonLyricsResponse
+		if (!payload.success || !payload.data?.lyrics) return { status: 'not-found' }
 
-		if (data.data.lyrics) {
-			const isTtml = data.data.lyrics.trim().startsWith('<tt')
-			const lines = isTtml ? parseTtml(data.data.lyrics) : parseLrc(data.data.lyrics, getDurationSeconds(track) * 1000)
+		const isTtml = payload.data.lyrics.trim().startsWith('<tt')
+		const lines = isTtml ? parseTtml(payload.data.lyrics) : parseLrc(payload.data.lyrics, getDurationSeconds(track) * 1000)
 
-			if (lines.length > 0) {
-				return {
-					status: 'found',
-					source: 'unison',
-					lines,
-					syncType: isTtml ? 'word' : 'line'
-				}
+		if (lines.length > 0) {
+			return {
+				status: 'found',
+				source: 'unison',
+				lines,
+				syncType: isTtml ? 'karaoke' : 'line'
 			}
 		}
+		
 		return { status: 'not-found' }
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') throw error
@@ -375,13 +402,16 @@ const fetchUnisonLyrics = async (track: TrackData, signal: AbortSignal): Promise
 	}
 }
 
-const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7
-
 const getLyricsFromCache = async (trackId: number): Promise<SyncedLyricsResult | undefined> => {
 	try {
 		const db = await getDatabase()
 		const cached = await db.get('lyrics', trackId)
-		if (!cached || Date.now() - cached.cachedAt > CACHE_TTL_MS) return undefined
+		
+		// Guard against old, incompatible caches
+		if (!cached || cached.version !== CACHE_VERSION || Date.now() - cached.cachedAt > CACHE_TTL_MS) {
+			return undefined
+		}
+		
 		return cached.data
 	} catch {
 		return undefined
@@ -391,15 +421,13 @@ const getLyricsFromCache = async (trackId: number): Promise<SyncedLyricsResult |
 const saveLyricsToCache = async (trackId: number, data: SyncedLyricsResult) => {
 	try {
 		const db = await getDatabase()
-		await db.put('lyrics', { trackId, data, cachedAt: Date.now() })
+		await db.put('lyrics', { trackId, data, version: CACHE_VERSION, cachedAt: Date.now() })
 	} catch { }
 }
 
 export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): Promise<SyncedLyricsResult> => {
 	let cachedResult = await getLyricsFromCache(track.id)
 
-	// Re-apply sync mode rules on cached results to prevent stale data from persisting.
-	// convertToLineOnly() is still necessary here for cached TTML results that need BPM flattening.
 	if (cachedResult && cachedResult.status === 'found') {
 		const targetSyncMode = getLyricsSyncMode(track, cachedResult)
 		if (targetSyncMode === 'line' && cachedResult.syncType !== 'line') {
@@ -444,8 +472,7 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 			result = await fetchLrclibLyrics(track, signal)
 		}
 
-		// Adaptive sync mode override — only meaningful for real word-timed sources (TTML).
-		// LRC-sourced results already have syncType: 'line' and uniform word timestamps.
+		// Adaptive sync mode override
 		if (result.status === 'found') {
 			const targetSyncMode = getLyricsSyncMode(track, result)
 			if (targetSyncMode === 'line' && result.syncType !== 'line') {
