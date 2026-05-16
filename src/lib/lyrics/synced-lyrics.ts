@@ -763,10 +763,21 @@ export const fetchSyncedLyrics = async (
 			status: 'not-found',
 		}
 
-		// Try Unison first as requested
-		result = await fetchUnisonLyrics(track, signal)
+		const bpm = (track as { bpm?: number }).bpm
+		const isSlow = bpm !== undefined && bpm < SLOW_PACED_BPM_THRESHOLD
 
-		if (result.status !== 'found') {
+		// 1. If the song is slow, check LRCLIB immediately
+		if (isSlow) {
+			result = await fetchLrclibLyrics(track, signal)
+		}
+
+		// 2. Fallback to UniSon (Main Provider)
+		if (result.status !== 'found' && result.status !== 'instrumental') {
+			result = await fetchUnisonLyrics(track, signal)
+		}
+
+		// 3. Fallback to Lyrics+ 
+		if (result.status !== 'found' && result.status !== 'instrumental') {
 			const lyricsPlusLines = await fetchLyricsPlusLyrics(track, signal)
 
 			if (lyricsPlusLines.length > 0) {
@@ -775,9 +786,12 @@ export const fetchSyncedLyrics = async (
 					source: 'lyricsplus',
 					lines: lyricsPlusLines,
 				}
-			} else {
-				result = await fetchLrclibLyrics(track, signal)
 			}
+		}
+
+		// 4. Fallback to LRCLIB (if it wasn't already checked as a slow song and the others failed)
+		if (!isSlow && result.status !== 'found' && result.status !== 'instrumental') {
+			result = await fetchLrclibLyrics(track, signal)
 		}
 
 		/**
@@ -807,4 +821,3 @@ export const fetchSyncedLyrics = async (
 		return { status: 'error' }
 	}
 }
-
