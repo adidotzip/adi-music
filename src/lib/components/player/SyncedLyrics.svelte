@@ -341,7 +341,8 @@
 								{#if primaryWords.length > 0}
 									<div class="primary-lyrics-block">
 										{#each primaryWords as word}
-											{#if word.string.trim().length > 0}
+											<!-- Removed the trim() check so we don't accidentally erase valid spaces -->
+											{#if word.string.length > 0}
 												{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}
 												{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}
 												{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}
@@ -363,7 +364,8 @@
 								{#if secondaryWords.length > 0}
 									<div class="secondary-lyrics-block">
 										{#each secondaryWords as word}
-											{#if word.string.trim().length > 0}
+											<!-- Removed the trim() check so we don't accidentally erase valid spaces -->
+											{#if word.string.length > 0}
 												{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}
 												{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}
 												{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}
@@ -475,7 +477,6 @@
 		opacity: clamp(0.05, calc(0.2 / (1 + var(--distance) * 0.6)), 1);
 	}
 
-	/* Layout blocks for keeping secondary below main */
 	.primary-lyrics-block {
 		display: block;
 		width: 100%;
@@ -505,21 +506,19 @@
 	.lyric-word {
 		display: inline-block;
 		position: relative;
-		margin-right: 0.15em;
+		/* Enforce pre-wrap to ensure strict whitespace rendering for trailing spaces on inline-blocks */
+		white-space: pre-wrap;
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
-		/* Slight pop up animation setup */
 		transform: translateY(0);
 		transition: transform 0.25s ease-out;
 	}
 
-	/* Moves words slightly up when sung */
 	.lyric-line.active .lyric-word.is-sung {
 		transform: translateY(-2px);
 	}
 
 	.lyric-line.active .lyric-word {
-		/* Professional fade: tight 5% margin to prevent white spills */
 		background: linear-gradient(
 			to right,
 			#ffffff 0%,
@@ -560,7 +559,6 @@
 		height: 10px;
 		border-radius: 50%;
 		background-color: rgba(255, 255, 255, 0.15);
-		/* Bouncy easing for smooth 3 dots */
 		transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 		transform: scale(1);
 	}
