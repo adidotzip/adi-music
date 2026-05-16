@@ -14,7 +14,7 @@ const LRCLIB_DURATION_TOLERANCE_SECONDS = 4
 const SLOW_PACED_BPM_THRESHOLD = 80
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7
-const CACHE_VERSION = 1 // Bump when parser logic/schema changes
+const CACHE_VERSION = 2 // Bumped to invalidate old character-length timing caches
 
 export interface SyncedLyricsWord {
 	string: string
@@ -255,6 +255,37 @@ const scoreLrclibSearchResult = (data: LrclibLyricsResponse, track: TrackData, d
 	return score
 }
 
+const getWordWeight = (word: string): number => {
+	const clean = word.toLowerCase()
+
+	// Base visual length
+	let weight = clean.length
+
+	// Stretch vowels harder
+	const vowelMatches = clean.match(/[aeiouy]/g)
+	if (vowelMatches) {
+		weight += vowelMatches.length * 1.8
+	}
+
+	// Repeated vowels = even longer sustain
+	const repeatedVowels = clean.match(/([aeiouy])\1+/g)
+	if (repeatedVowels) {
+		weight += repeatedVowels.length * 3
+	}
+
+	// Common sustained endings
+	if (/(ay|ee|oo|ah|oh|uh)$/i.test(clean)) {
+		weight += 2
+	}
+
+	// Tiny connector words shouldn't dominate timing
+	if (/^(a|an|the|to|of|in|on|at|it)$/i.test(clean)) {
+		weight *= 0.6
+	}
+
+	return Math.max(weight, 1)
+}
+
 const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: SyncedLyricsLine[]; syncType: LyricsSyncMode } | null => {
 	if (!isRecord(data)) return null
 
@@ -264,20 +295,20 @@ const getLyricsPlusResult = (data: unknown, durationSeconds: number): { lines: S
 	}
 
 	if (Array.isArray(data.lyrics)) {
-		// Character-weighted interpolation for natural feeling karaoke
+		// Vocal-weighted interpolation for natural feeling karaoke
 		const lines = data.lyrics
 			.map((line): SyncedLyricsLine | undefined => {
 				if (!isRecord(line) || typeof line.text !== 'string' || !isFiniteNumber(line.time) || !isFiniteNumber(line.duration)) return
 				const wordsList = line.text.split(whitespacePattern).filter(Boolean)
 				
-				const totalChars = wordsList.reduce((sum, word) => sum + word.length, 0) || 1
+				const totalWeight = wordsList.reduce((sum, word) => sum + getWordWeight(word), 0) || 1
 				let currentWordTime = line.time
 				
 				return {
 					startTime: line.time,
 					endTime: line.time + line.duration,
 					words: wordsList.map((word, i) => {
-						const timeShare = (word.length / totalChars) * line.duration
+						const timeShare = (getWordWeight(word) / totalWeight) * line.duration
 						const wordTimestamp = currentWordTime
 						currentWordTime += timeShare
 						return {
