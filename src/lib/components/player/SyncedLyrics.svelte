@@ -2,7 +2,7 @@
 	import type { SyncedLyricsLine } from '$lib/lyrics/synced-lyrics.ts'
 
 	type LyricItem = 
-		| (SyncedLyricsLine & { type: 'line'; isSecondaryLine: boolean; words: any[] })
+		| (SyncedLyricsLine & { type: 'line'; isSecondaryLine: boolean; isLineLevel: boolean; words: any[] })
 		| { type: 'break'; startTime: number; endTime: number; id: string };
 
 	const getActiveLineIndex = (
@@ -134,6 +134,24 @@
 			const lineText = words.map((w) => w.string).join('').trim()
 			const isSecondaryLine = lineText.startsWith('(') && lineText.endsWith(')')
 
+			// ─── Line-Level Detection Heuristic ───
+			// LRC parses fake word times evenly. If words are perfectly uniform, treat it as line-level.
+			let isLineLevel = false
+			if (words.length > 0) {
+				const expectedDuration = (line.endTime - line.startTime) / words.length
+				let faked = words[0].time === line.startTime
+				if (faked) {
+					for (let w = 1; w < words.length; w++) {
+						const diff = words[w].time - words[w-1].time
+						if (Math.abs(diff - expectedDuration) > 3) {
+							faked = false
+							break
+						}
+					}
+				}
+				isLineLevel = faked
+			}
+
 			// Inject originalIndex so we can split them structurally later without breaking timing checks
 			const cleanedWords = words.map((word, idx) => {
 				return {
@@ -147,7 +165,8 @@
 				type: 'line', 
 				...line, 
 				words: cleanedWords, 
-				isSecondaryLine 
+				isSecondaryLine,
+				isLineLevel
 			})
 		}
 		return items
@@ -318,13 +337,15 @@
 								<div class="primary-lyrics-block">
 									{#each primaryWords as word}
 										{#if word.string.trim().length > 0}
-											{@const isPastWord = isActiveLine && word.originalIndex < activeWordIdx}
-											{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}
+											{@const isPastWord = isActiveLine && (item.isLineLevel || word.originalIndex < activeWordIdx)}
+											{@const isCurrentWord = isActiveLine && !item.isLineLevel && word.originalIndex === activeWordIdx}
 											{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}
 											{@const duration = Math.max(nextTime - word.time, 1)}
-											{@const wordProgress = isCurrentWord
-												? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
-												: isPastWord ? 100 : 0}
+											{@const wordProgress = item.isLineLevel 
+												? (isActiveLine ? 100 : 0) 
+												: (isCurrentWord 
+													? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 
+													: isPastWord ? 100 : 0)}
 
 											<span
 												class="lyric-word"
@@ -340,13 +361,15 @@
 								<div class="secondary-lyrics-block">
 									{#each secondaryWords as word}
 										{#if word.string.trim().length > 0}
-											{@const isPastWord = isActiveLine && word.originalIndex < activeWordIdx}
-											{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}
+											{@const isPastWord = isActiveLine && (item.isLineLevel || word.originalIndex < activeWordIdx)}
+											{@const isCurrentWord = isActiveLine && !item.isLineLevel && word.originalIndex === activeWordIdx}
 											{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}
 											{@const duration = Math.max(nextTime - word.time, 1)}
-											{@const wordProgress = isCurrentWord
-												? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100
-												: isPastWord ? 100 : 0}
+											{@const wordProgress = item.isLineLevel 
+												? (isActiveLine ? 100 : 0) 
+												: (isCurrentWord 
+													? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 
+													: isPastWord ? 100 : 0)}
 
 											<span
 												class="lyric-word secondary-word"
