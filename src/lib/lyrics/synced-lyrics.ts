@@ -503,28 +503,28 @@ export const fetchSyncedLyrics = async (track: TrackData, signal: AbortSignal): 
 		const bpm = (track as { bpm?: number }).bpm
 		const isSlow = bpm !== undefined && bpm < SLOW_PACED_BPM_THRESHOLD
 
-		// 1. Slow songs: check LRCLIB first
-		if (isSlow) result = await fetchLrclibLyrics(track, signal)
+		// 1. LyricsPlus (Main Source - check this first for everything)
+		const lyricsPlusData = await fetchLyricsPlusLyrics(track, signal)
+		if (lyricsPlusData && lyricsPlusData.lines.length > 0) {
+			result = {
+				status: 'found',
+				source: 'lyricsplus',
+				lines: lyricsPlusData.lines,
+				syncType: lyricsPlusData.syncType
+			}
+		}
 
-		// 2. Unison (main source)
+		// 2. Slow songs specific fallback: check LRCLIB first
+		if (isSlow && result.status !== 'found' && result.status !== 'instrumental') {
+			result = await fetchLrclibLyrics(track, signal)
+		}
+
+		// 3. Unison (Secondary fallback)
 		if (result.status !== 'found' && result.status !== 'instrumental') {
 			result = await fetchUnisonLyrics(track, signal)
 		}
 
-		// 3. LyricsPlus (Attempts Apple, then Musixmatch if empty/fails)
-		if (result.status !== 'found' && result.status !== 'instrumental') {
-			const lyricsPlusData = await fetchLyricsPlusLyrics(track, signal)
-			if (lyricsPlusData && lyricsPlusData.lines.length > 0) {
-				result = {
-					status: 'found',
-					source: 'lyricsplus',
-					lines: lyricsPlusData.lines,
-					syncType: lyricsPlusData.syncType
-				}
-			}
-		}
-
-		// 4. Fallback LRCLIB (normal-paced songs only)
+		// 4. Normal-paced general fallback: check LRCLIB
 		if (!isSlow && result.status !== 'found' && result.status !== 'instrumental') {
 			result = await fetchLrclibLyrics(track, signal)
 		}
