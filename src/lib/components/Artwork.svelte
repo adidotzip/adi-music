@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { canPlayHLS } from '$lib/helpers/utils/ua.ts'
 	import type { IconType } from './icon/Icon.svelte'
 	import Icon from './icon/Icon.svelte'
 
@@ -27,12 +28,6 @@
 	let error = $state(false)
 	let animatedError = $state(false)
 
-	let canPlayHLS = $state(false)
-	$effect(() => {
-		const video = document.createElement('video')
-		canPlayHLS = video.canPlayType('application/vnd.apple.mpegurl') !== ''
-	})
-
 	$effect(() => {
 		void src
 		void animatedSrc
@@ -49,7 +44,7 @@
 		}
 
 		if (animatedSrc.endsWith('.m3u8')) {
-			return canPlayHLS
+			return canPlayHLS()
 		}
 
 		return true
