@@ -72,6 +72,16 @@ export const isChromiumBased = runOnce((): boolean => {
 	return false
 })
 
+export const canPlayHLS = runOnce((): boolean => {
+	if (typeof document === 'undefined') {
+		return false
+	}
+
+	const video = document.createElement('video')
+
+	return video.canPlayType('application/vnd.apple.mpegurl') !== ''
+})
+
 /**
  * Returns whether the primary modifier key is pressed.
  * On Mac this is the Meta key (Cmd), on Windows/Linux it's the Ctrl key.
