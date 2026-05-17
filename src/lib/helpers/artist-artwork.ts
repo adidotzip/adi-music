@@ -4,16 +4,15 @@ import { SerialQueue } from './serial-queue.ts'
 const queue = new SerialQueue()
 
 const NONE_CACHE_DURATION = 1000 * 60 * 30 // 30 mins
+const DEFAULT_IMAGE = 'https://www.jiosaavn.com/_i/3.0/artist-default-music.png'
+const JIOSAAVN_API = 'https://jiosaavn-apix.arcadopredator.workers.dev/api/search/artists'
 
 const pendingRequests = new Map<string, Promise<string | undefined>>()
 
-const getStorageKey = (artist: string) =>
-	`snaeplayer-artist-artwork.${artist}`
-
-const DEFAULT_IMAGE = 'https://www.jiosaavn.com/_i/3.0/artist-default-music.png'
+const getStorageKey = (artist: string) => `snaeplayer-artist-artwork.${artist}`
 
 // --------------------
-// Fixed Type Definitions matching JioSaavn Data Shape
+// Type Definitions
 // --------------------
 
 type JioSaavnImageNode = {
@@ -30,27 +29,18 @@ type JioSaavnArtist = {
 	url: string
 }
 
-type JioSaavnSearchContainer = {
-	total: number
-	start: number
-	results: JioSaavnArtist[]
-}
-
-type ApiResponse = {
+type JioSaavnSearchResponse = {
 	success: boolean
-	data: JioSaavnSearchContainer
+	data: {
+		total: number
+		start: number
+		results: JioSaavnArtist[]
+	}
 }
 
 type CachedArtwork =
-	| {
-			type: 'image'
-			value: string
-			timestamp: number
-	  }
-	| {
-			type: 'none'
-			timestamp: number
-	  }
+	| { type: 'image'; value: string; timestamp: number }
+	| { type: 'none'; timestamp: number }
 
 // --------------------
 // Storage Helpers
@@ -67,11 +57,7 @@ const safeSetStorage = (key: string, value: CachedArtwork) => {
 const safeGetStorage = (key: string): CachedArtwork | null => {
 	try {
 		const raw = localStorage.getItem(key)
-
-		if (!raw) {
-			return null
-		}
-
+		if (!raw) return null
 		return JSON.parse(raw) as CachedArtwork
 	} catch {
 		return null
@@ -82,11 +68,10 @@ const safeGetStorage = (key: string): CachedArtwork | null => {
 // Artwork Resolution Helpers
 // --------------------
 
-/** Picks the best (highest-quality, non-placeholder) image URL from a JioSaavn image array. */
+/** Picks the highest-quality, non-placeholder image URL from a JioSaavn image array. */
 const resolveBestImage = (images: JioSaavnImageNode[]): string | undefined => {
 	if (!Array.isArray(images) || images.length === 0) return undefined
 
-	// Iterate from highest quality (end of array) to lowest
 	for (let i = images.length - 1; i >= 0; i--) {
 		const url = images[i]?.url
 		if (url && url !== DEFAULT_IMAGE) return url
@@ -95,13 +80,12 @@ const resolveBestImage = (images: JioSaavnImageNode[]): string | undefined => {
 	return undefined
 }
 
-/** Finds the best artist match: exact name first, then falls back to first result. */
+/** Exact name match first (case-insensitive), falls back to first result. */
 const resolveBestMatch = (
 	results: JioSaavnArtist[],
 	artist: string,
 ): JioSaavnArtist | undefined => {
 	if (results.length === 0) return undefined
-
 	const needle = artist.trim().toLowerCase()
 	return results.find((r) => r.name?.toLowerCase() === needle) ?? results[0]
 }
@@ -113,9 +97,7 @@ const resolveBestMatch = (
 export const getArtistArtwork = async (
 	artist: string,
 ): Promise<string | undefined> => {
-	if (!artist || artist === UNKNOWN_ITEM) {
-		return undefined
-	}
+	if (!artist || artist === UNKNOWN_ITEM) return undefined
 
 	const key = getStorageKey(artist)
 
@@ -123,24 +105,16 @@ export const getArtistArtwork = async (
 	const cached = safeGetStorage(key)
 
 	if (cached) {
-		if (cached.type === 'image') {
-			return cached.value
-		}
+		if (cached.type === 'image') return cached.value
 
-		if (
-			cached.type === 'none' &&
-			Date.now() - cached.timestamp < NONE_CACHE_DURATION
-		) {
+		if (cached.type === 'none' && Date.now() - cached.timestamp < NONE_CACHE_DURATION) {
 			return undefined
 		}
 	}
 
-	// Deduplicate requests
+	// Deduplicate in-flight requests
 	const pending = pendingRequests.get(artist)
-
-	if (pending) {
-		return pending
-	}
+	if (pending) return pending
 
 	const request = (async () => {
 		try {
@@ -149,9 +123,7 @@ export const getArtistArtwork = async (
 				const cachedAgain = safeGetStorage(key)
 
 				if (cachedAgain) {
-					if (cachedAgain.type === 'image') {
-						return cachedAgain.value
-					}
+					if (cachedAgain.type === 'image') return cachedAgain.value
 
 					if (
 						cachedAgain.type === 'none' &&
@@ -164,71 +136,49 @@ export const getArtistArtwork = async (
 				let bestImage: string | undefined
 
 				try {
-					const baseUrl =
-						typeof window !== 'undefined' ? window.location.origin : ''
-
 					const response = await fetch(
-						`${baseUrl}/api/artist-art?artist=${encodeURIComponent(artist)}`,
+						`${JIOSAAVN_API}?query=${encodeURIComponent(artist)}`,
 						{ headers: { Accept: 'application/json' } },
 					)
 
 					if (!response.ok) {
-						console.warn(
-							`[Artwork] API returned ${response.status} for "${artist}"`,
-						)
-
+						console.warn(`[Artwork] JioSaavn returned ${response.status} for "${artist}"`)
 						safeSetStorage(key, { type: 'none', timestamp: Date.now() })
 						return undefined
 					}
 
-					let apiRes: ApiResponse
+					let payload: JioSaavnSearchResponse
 
 					try {
 						const text = await response.text()
 
-						// HTML response protection
 						if (text.trim().startsWith('<')) {
-							console.error(
-								`[Artwork] HTML returned instead of JSON for "${artist}"`,
-							)
-
+							console.error(`[Artwork] HTML returned instead of JSON for "${artist}"`)
 							safeSetStorage(key, { type: 'none', timestamp: Date.now() })
 							return undefined
 						}
 
-						apiRes = JSON.parse(text) as ApiResponse
+						payload = JSON.parse(text) as JioSaavnSearchResponse
 					} catch (parseError) {
-						console.error(
-							`[Artwork] Failed to parse JSON for "${artist}"`,
-							parseError,
-						)
-
+						console.error(`[Artwork] Failed to parse JSON for "${artist}"`, parseError)
 						safeSetStorage(key, { type: 'none', timestamp: Date.now() })
 						return undefined
 					}
 
-					if (apiRes.success && apiRes.data?.results) {
-						const match = resolveBestMatch(apiRes.data.results, artist)
-						if (match) {
-							bestImage = resolveBestImage(match.image)
-						}
+					if (payload.success && payload.data?.results) {
+						const match = resolveBestMatch(payload.data.results, artist)
+						if (match) bestImage = resolveBestImage(match.image)
 					}
 				} catch (networkError: any) {
 					console.error(
 						`[Network Error] ${artist}: ${networkError?.name ?? 'Unknown'} - ${networkError?.message ?? 'No message'}`,
 						networkError,
 					)
-
 					return undefined
 				}
 
 				if (bestImage) {
-					safeSetStorage(key, {
-						type: 'image',
-						value: bestImage,
-						timestamp: Date.now(),
-					})
-
+					safeSetStorage(key, { type: 'image', value: bestImage, timestamp: Date.now() })
 					return bestImage
 				}
 
@@ -241,6 +191,5 @@ export const getArtistArtwork = async (
 	})()
 
 	pendingRequests.set(artist, request)
-
 	return request
 }
