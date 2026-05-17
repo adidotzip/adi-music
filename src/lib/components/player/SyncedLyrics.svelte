@@ -2,7 +2,7 @@
 	import type { SyncedLyricsLine } from '$lib/lyrics/synced-lyrics.ts'
 
 	type LyricItem = 
-		| (SyncedLyricsLine & { type: 'line'; isSecondaryLine: boolean; words: any[] })
+		| (SyncedLyricsLine & { type: 'line'; isSecondaryLine: boolean; words: any[]; isOpposite: boolean })
 		| { type: 'break'; startTime: number; endTime: number; id: string };
 
 	const getActiveLineIndex = (
@@ -150,7 +150,9 @@
 				type: 'line', 
 				...line, 
 				words: cleanedWords, 
-				isSecondaryLine
+				isSecondaryLine,
+				// Capture opposite singer flag from API (default to false if unsupported)
+				isOpposite: (line as any).isOpposite ?? false
 			})
 		}
 		return items
@@ -247,18 +249,18 @@
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
 	<div class="empty-state z-10 m-auto flex h-full max-w-80 flex-col items-center justify-center text-center opacity-50 transition-opacity duration-500">
-		<Icon type={icon} class="mb-4 h-12 w-12 text-white/40" />
-		<h3 class="text-xl font-bold text-white">{title}</h3>
-		<p class="mt-2 text-sm text-white/60">{description}</p>
+		<Icon type={icon} class="mb-4 h-12 w-12 text-black/40 dark:text-white/40" />
+		<h3 class="text-xl font-bold text-black dark:text-white">{title}</h3>
+		<p class="mt-2 text-sm text-black/60 dark:text-white/60">{description}</p>
 	</div>
 {/snippet}
 
-<section class={["lyrics-shell w-full h-full relative overflow-hidden", !player.animatedArtworkSrc && "bg-black", className]} aria-live="polite">
+<section class={["lyrics-shell w-full h-full relative overflow-hidden", !player.animatedArtworkSrc && "bg-black dark", className]} aria-live="polite">
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track Playing', 'Play a track to follow along with the lyrics.')}
 	{:else if loading}
 		<div class="flex h-full w-full items-center justify-center">
-			<Spinner class="h-8 w-8 text-white/50" />
+			<Spinner class="h-8 w-8 text-black/50 dark:text-white/50" />
 		</div>
 	{:else if result?.status === 'found'}
 		<div
@@ -310,6 +312,7 @@
 							class:active={isActiveLine}
 							class:past={isLinePast}
 							class:secondary-line={item.isSecondaryLine}
+							class:opposite={item.isOpposite}
 							data-line-index={itemIndex}
 							style="--distance: {distance}"
 							onclick={() => {
@@ -324,6 +327,7 @@
 										<span 
 											class="lyric-word" 
 											class:is-sung={isActiveLine || isLinePast} 
+											class:is-current={isActiveLine}
 											style="--word-progress: {isActiveLine || isLinePast ? 100 : 0}%"
 										>{primaryWords.map(w => w.string).join('')}</span>
 									</div>
@@ -333,6 +337,7 @@
 										<span 
 											class="lyric-word secondary-word" 
 											class:is-sung={isActiveLine || isLinePast} 
+											class:is-current={isActiveLine}
 											style="--word-progress: {isActiveLine || isLinePast ? 100 : 0}%"
 										>{secondaryWords.map(w => w.string).join('')}</span>
 									</div>
@@ -341,14 +346,14 @@
 								{#if primaryWords.length > 0}
 									<div class="primary-lyrics-block">
 										<!-- Removing any linebreaks/whitespace between spans to ensure strict concatenation -->
-										{#each primaryWords as word}{#if word.string.length > 0}{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}{@const duration = Math.max(nextTime - word.time, 1)}{@const wordProgress = isLinePast ? 100 : (isCurrentWord ? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 : isPastWord ? 100 : 0)}<span class="lyric-word" class:is-sung={isPastWord || isCurrentWord} style="--word-progress: {wordProgress}%">{word.string}</span>{/if}{/each}
+										{#each primaryWords as word}{#if word.string.length > 0}{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}{@const duration = Math.max(nextTime - word.time, 1)}{@const wordProgress = isLinePast ? 100 : (isCurrentWord ? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 : isPastWord ? 100 : 0)}<span class="lyric-word" class:is-sung={isPastWord || isCurrentWord} class:is-current={isCurrentWord} style="--word-progress: {wordProgress}%">{word.string}</span>{/if}{/each}
 									</div>
 								{/if}
 
 								{#if secondaryWords.length > 0}
 									<div class="secondary-lyrics-block">
 										<!-- Removing any linebreaks/whitespace between spans to ensure strict concatenation -->
-										{#each secondaryWords as word}{#if word.string.length > 0}{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}{@const duration = Math.max(nextTime - word.time, 1)}{@const wordProgress = isLinePast ? 100 : (isCurrentWord ? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 : isPastWord ? 100 : 0)}<span class="lyric-word secondary-word" class:is-sung={isPastWord || isCurrentWord} style="--word-progress: {wordProgress}%">{word.string}</span>{/if}{/each}
+										{#each secondaryWords as word}{#if word.string.length > 0}{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}{@const duration = Math.max(nextTime - word.time, 1)}{@const wordProgress = isLinePast ? 100 : (isCurrentWord ? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 : isPastWord ? 100 : 0)}<span class="lyric-word secondary-word" class:is-sung={isPastWord || isCurrentWord} class:is-current={isCurrentWord} style="--word-progress: {wordProgress}%">{word.string}</span>{/if}{/each}
 									</div>
 								{/if}
 							{/if}
@@ -364,6 +369,38 @@
 
 <style lang="postcss">
 	@reference "../../../app.css";
+
+	.lyrics-shell {
+		/* Light mode theme variables */
+		--lyric-text-color: #000000;
+		--lyric-fill-color: #000000;
+		--lyric-base-color: rgba(0, 0, 0, 0.2);
+		--lyric-sec-text-color: rgba(0, 0, 0, 0.6);
+		--lyric-sec-fill-color: rgba(0, 0, 0, 0.85);
+		--lyric-sec-base-color: rgba(0, 0, 0, 0.15);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.lyrics-shell {
+			/* Dark mode theme variables */
+			--lyric-text-color: #ffffff;
+			--lyric-fill-color: #ffffff;
+			--lyric-base-color: rgba(255, 255, 255, 0.3);
+			--lyric-sec-text-color: rgba(255, 255, 255, 0.6);
+			--lyric-sec-fill-color: rgba(255, 255, 255, 0.85);
+			--lyric-sec-base-color: rgba(255, 255, 255, 0.15);
+		}
+	}
+
+	/* Force dark mode variables if the shell has a specific background logic forcing it black */
+	.lyrics-shell.bg-black {
+		--lyric-text-color: #ffffff;
+		--lyric-fill-color: #ffffff;
+		--lyric-base-color: rgba(255, 255, 255, 0.3);
+		--lyric-sec-text-color: rgba(255, 255, 255, 0.6);
+		--lyric-sec-fill-color: rgba(255, 255, 255, 0.85);
+		--lyric-sec-base-color: rgba(255, 255, 255, 0.15);
+	}
 
 	.lyrics-container {
 		mask-image: linear-gradient(
@@ -417,6 +454,15 @@
 			filter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
 	}
 
+	/* Handling multiple singers */
+	.lyric-item.opposite {
+		text-align: right;
+		transform-origin: right center;
+	}
+	.lyric-break.opposite {
+		justify-content: flex-end;
+	}
+
 	.lyric-line {
 		font-family: var(--font-sans);
 		font-size: 2.15rem;
@@ -426,7 +472,7 @@
 		line-height: 1.2;
 		letter-spacing: -0.02em;
 		white-space: pre-wrap;
-		color: #fff;
+		color: var(--lyric-text-color);
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
 	}
@@ -462,31 +508,39 @@
 		@media (min-width: 1024px) { font-size: 2.5rem; }
 		font-weight: 600;
 		font-style: italic;
-		color: rgba(255, 255, 255, 0.6);
+		color: var(--lyric-sec-text-color);
 	}
 
 	.lyric-word.secondary-word {
 		font-size: 0.85em; 
-		color: rgba(255, 255, 255, 0.6);
+		color: var(--lyric-sec-text-color);
 		font-style: italic;
 	}
 
 	.lyric-word {
-		/* Switched from inline-block to inline to restore kerning and prevent box-breaking */
+		/* Kept inline to restore kerning and prevent box-breaking */
 		display: inline;
 		position: relative;
 		white-space: pre-wrap;
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
+		
+		/* Animates up when sung via the `top` property */
+		top: 0;
+		transition: top 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	.lyric-word.is-current {
+		top: -6px;
 	}
 
 	.lyric-line.active .lyric-word {
 		background: linear-gradient(
 			to right,
-			#ffffff 0%,
-			#ffffff var(--word-progress),
-			rgba(255, 255, 255, 0.3) calc(var(--word-progress) + 5%),
-			rgba(255, 255, 255, 0.3) 100%
+			var(--lyric-fill-color) 0%,
+			var(--lyric-fill-color) var(--word-progress),
+			var(--lyric-base-color) calc(var(--word-progress) + 5%),
+			var(--lyric-base-color) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -496,10 +550,10 @@
 	.lyric-line.active .lyric-word.secondary-word {
 		background: linear-gradient(
 			to right,
-			rgba(255, 255, 255, 0.85) 0%,
-			rgba(255, 255, 255, 0.85) var(--word-progress),
-			rgba(255, 255, 255, 0.15) calc(var(--word-progress) + 5%),
-			rgba(255, 255, 255, 0.15) 100%
+			var(--lyric-sec-fill-color) 0%,
+			var(--lyric-sec-fill-color) var(--word-progress),
+			var(--lyric-sec-base-color) calc(var(--word-progress) + 5%),
+			var(--lyric-sec-base-color) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -520,13 +574,13 @@
 		width: 10px;
 		height: 10px;
 		border-radius: 50%;
-		background-color: rgba(255, 255, 255, 0.15);
+		background-color: var(--lyric-sec-base-color);
 		transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 		transform: scale(1);
 	}
 
 	.dot.filled {
-		background-color: #ffffff;
+		background-color: var(--lyric-fill-color);
 		transform: scale(1.5);
 	}
 </style>
