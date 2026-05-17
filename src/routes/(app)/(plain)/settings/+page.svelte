@@ -78,6 +78,13 @@
 		mainStore.customThemePaletteHex = value
 	}, 400)
 
+	let colorPickerElement: HTMLInputElement | undefined = $state()
+	let localCustomColor = $state(mainStore.customThemePaletteHex ?? '#000000')
+
+	$effect(() => {
+		localCustomColor = mainStore.customThemePaletteHex ?? '#000000'
+	})
+
 	// We debounce state updates, because some DB operations can be very fast.
 	// This prevents UI from flickering
 	const isDatabasePendingGetter = new Debounced(() => isDatabaseOperationPending(), 200)
@@ -166,24 +173,22 @@
 				kind="toned"
 				class="max-sm:w-full"
 				onclick={() => {
-					const colorPicker = document.getElementById('color-picker') as HTMLInputElement
-					colorPicker.click()
+					colorPickerElement?.click()
 				}}
 			>
 				<Icon type="eyedropper" class="size-5" />
 
 				{m.settingsColorPick()}
-
-				<input
-					id="color-picker"
-					type="color"
-					tabindex="-1"
-					bind:value={
-						() => mainStore.customThemePaletteHex ?? '#000000', (value) => updateMainColor(value)
-					}
-					class="pointer-events-none absolute inset-0 size-full appearance-none opacity-0"
-				/>
 			</Button>
+
+			<input
+				bind:this={colorPickerElement}
+				type="color"
+				tabindex="-1"
+				bind:value={localCustomColor}
+				oninput={(e) => updateMainColor(e.currentTarget.value)}
+				class="sr-only"
+			/>
 		</div>
 	</div>
 
