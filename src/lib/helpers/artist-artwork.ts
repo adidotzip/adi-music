@@ -5,7 +5,9 @@ const queue = new SerialQueue()
 
 const NONE_CACHE_DURATION = 1000 * 60 * 30 // 30 mins
 const DEFAULT_IMAGE = 'https://www.jiosaavn.com/_i/3.0/artist-default-music.png'
-const JIOSAAVN_API = 'https://jiosaavn-apix.arcadopredator.workers.dev/api/search/artists'
+
+const JIOSAAVN_API =
+	'https://jiosaavn-apix.arcadopredator.workers.dev/api/search/artists'
 
 const pendingRequests = new Map<string, Promise<string | undefined>>()
 
@@ -57,7 +59,9 @@ const safeSetStorage = (key: string, value: CachedArtwork) => {
 const safeGetStorage = (key: string): CachedArtwork | null => {
 	try {
 		const raw = localStorage.getItem(key)
+
 		if (!raw) return null
+
 		return JSON.parse(raw) as CachedArtwork
 	} catch {
 		return null
@@ -65,29 +69,104 @@ const safeGetStorage = (key: string): CachedArtwork | null => {
 }
 
 // --------------------
+// Text Helpers
+// --------------------
+
+const normalize = (value: string) =>
+	value
+		.normalize('NFD')
+		.replace(/\p{Diacritic}/gu, '')
+		.toLowerCase()
+		.trim()
+
+// --------------------
 // Artwork Resolution Helpers
 // --------------------
 
-/** Picks the highest-quality, non-placeholder image URL from a JioSaavn image array. */
+/** Picks highest quality valid image */
 const resolveBestImage = (images: JioSaavnImageNode[]): string | undefined => {
 	if (!Array.isArray(images) || images.length === 0) return undefined
 
-	for (let i = images.length - 1; i >= 0; i--) {
-		const url = images[i]?.url
-		if (url && url !== DEFAULT_IMAGE) return url
+	const sorted = [...images].sort((a, b) => {
+		const getSize = (quality: string) => Number.parseInt(quality.split('x')[0] ?? '0')
+
+		return getSize(b.quality) - getSize(a.quality)
+	})
+
+	for (const image of sorted) {
+		const url = image?.url
+
+		if (
+			url &&
+			url !== DEFAULT_IMAGE &&
+			url.startsWith('http')
+		) {
+			return url
+		}
 	}
 
 	return undefined
 }
 
-/** Exact name match first (case-insensitive), falls back to first result. */
+/** Exact normalized match first, fallback to first result */
 const resolveBestMatch = (
 	results: JioSaavnArtist[],
 	artist: string,
 ): JioSaavnArtist | undefined => {
 	if (results.length === 0) return undefined
-	const needle = artist.trim().toLowerCase()
-	return results.find((r) => r.name?.toLowerCase() === needle) ?? results[0]
+
+	const needle = normalize(artist)
+
+	return (
+		results.find((result) => normalize(result.name ?? '') === needle) ??
+		results[0]
+	)
+}
+
+// --------------------
+// Network Helpers
+// --------------------
+
+const delay = (ms: number) =>
+	new Promise((resolve) => setTimeout(resolve, ms))
+
+const fetchWithRetry = async (
+	url: string,
+	retries = 2,
+): Promise<Response> => {
+	let lastError: unknown
+
+	for (let attempt = 0; attempt <= retries; attempt++) {
+		try {
+			const response = await fetch(url, {
+				headers: {
+					Accept: 'application/json',
+					'Cache-Control': 'no-cache',
+				},
+			})
+
+			if (response.ok) {
+				return response
+			}
+
+			console.warn(
+				`[Artwork] Attempt ${attempt + 1} failed with ${response.status}`,
+			)
+		} catch (error) {
+			lastError = error
+
+			console.warn(
+				`[Artwork] Network retry ${attempt + 1} failed`,
+				error,
+			)
+		}
+
+		if (attempt < retries) {
+			await delay(500 * (attempt + 1))
+		}
+	}
+
+	throw lastError ?? new Error('Unknown fetch failure')
 }
 
 // --------------------
@@ -97,24 +176,40 @@ const resolveBestMatch = (
 export const getArtistArtwork = async (
 	artist: string,
 ): Promise<string | undefined> => {
-	if (!artist || artist === UNKNOWN_ITEM) return undefined
+	if (!artist || artist === UNKNOWN_ITEM) {
+		return undefined
+	}
 
 	const key = getStorageKey(artist)
 
-	// Cache lookup
+	// --------------------
+	// Cache Lookup
+	// --------------------
+
 	const cached = safeGetStorage(key)
 
 	if (cached) {
-		if (cached.type === 'image') return cached.value
+		if (cached.type === 'image') {
+			return cached.value
+		}
 
-		if (cached.type === 'none' && Date.now() - cached.timestamp < NONE_CACHE_DURATION) {
+		if (
+			cached.type === 'none' &&
+			Date.now() - cached.timestamp < NONE_CACHE_DURATION
+		) {
 			return undefined
 		}
 	}
 
-	// Deduplicate in-flight requests
+	// --------------------
+	// Prevent Duplicate Requests
+	// --------------------
+
 	const pending = pendingRequests.get(artist)
-	if (pending) return pending
+
+	if (pending) {
+		return pending
+	}
 
 	const request = (async () => {
 		try {
@@ -123,7 +218,9 @@ export const getArtistArtwork = async (
 				const cachedAgain = safeGetStorage(key)
 
 				if (cachedAgain) {
-					if (cachedAgain.type === 'image') return cachedAgain.value
+					if (cachedAgain.type === 'image') {
+						return cachedAgain.value
+					}
 
 					if (
 						cachedAgain.type === 'none' &&
@@ -136,53 +233,100 @@ export const getArtistArtwork = async (
 				let bestImage: string | undefined
 
 				try {
-					const response = await fetch(
+					const response = await fetchWithRetry(
 						`${JIOSAAVN_API}?query=${encodeURIComponent(artist)}`,
-						{ headers: { Accept: 'application/json' } },
 					)
 
-					if (!response.ok) {
-						console.warn(`[Artwork] JioSaavn returned ${response.status} for "${artist}"`)
-						safeSetStorage(key, { type: 'none', timestamp: Date.now() })
+					const contentType = response.headers.get('content-type')
+
+					if (!contentType?.includes('application/json')) {
+						console.error(
+							`[Artwork] Invalid content type for "${artist}":`,
+							contentType,
+						)
+
+						safeSetStorage(key, {
+							type: 'none',
+							timestamp: Date.now(),
+						})
+
+						return undefined
+					}
+
+					const text = await response.text()
+
+					// HTML instead of JSON
+					if (text.trim().startsWith('<')) {
+						console.error(
+							`[Artwork] HTML returned instead of JSON for "${artist}"`,
+						)
+
+						safeSetStorage(key, {
+							type: 'none',
+							timestamp: Date.now(),
+						})
+
+						return undefined
+					}
+
+					// Detect truncated payload
+					if (!text.trim().endsWith('}')) {
+						console.error(
+							`[Artwork] Truncated JSON received for "${artist}"`,
+						)
+
 						return undefined
 					}
 
 					let payload: JioSaavnSearchResponse
 
 					try {
-						const text = await response.text()
-
-						if (text.trim().startsWith('<')) {
-							console.error(`[Artwork] HTML returned instead of JSON for "${artist}"`)
-							safeSetStorage(key, { type: 'none', timestamp: Date.now() })
-							return undefined
-						}
-
 						payload = JSON.parse(text) as JioSaavnSearchResponse
 					} catch (parseError) {
-						console.error(`[Artwork] Failed to parse JSON for "${artist}"`, parseError)
-						safeSetStorage(key, { type: 'none', timestamp: Date.now() })
+						console.error(
+							`[Artwork] Failed to parse JSON for "${artist}"`,
+							parseError,
+						)
+
 						return undefined
 					}
 
-					if (payload.success && payload.data?.results) {
-						const match = resolveBestMatch(payload.data.results, artist)
-						if (match) bestImage = resolveBestImage(match.image)
+					if (payload.success && payload.data?.results?.length) {
+						const match = resolveBestMatch(
+							payload.data.results,
+							artist,
+						)
+
+						if (match) {
+							bestImage = resolveBestImage(match.image)
+						}
 					}
 				} catch (networkError: any) {
 					console.error(
-						`[Network Error] ${artist}: ${networkError?.name ?? 'Unknown'} - ${networkError?.message ?? 'No message'}`,
+						`[Artwork] Network Error "${artist}": ${
+							networkError?.message ?? 'Unknown error'
+						}`,
 						networkError,
 					)
+
 					return undefined
 				}
 
 				if (bestImage) {
-					safeSetStorage(key, { type: 'image', value: bestImage, timestamp: Date.now() })
+					safeSetStorage(key, {
+						type: 'image',
+						value: bestImage,
+						timestamp: Date.now(),
+					})
+
 					return bestImage
 				}
 
-				safeSetStorage(key, { type: 'none', timestamp: Date.now() })
+				safeSetStorage(key, {
+					type: 'none',
+					timestamp: Date.now(),
+				})
+
 				return undefined
 			})
 		} finally {
@@ -191,5 +335,6 @@ export const getArtistArtwork = async (
 	})()
 
 	pendingRequests.set(artist, request)
+
 	return request
 }
