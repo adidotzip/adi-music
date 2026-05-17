@@ -183,7 +183,7 @@
 
 {#snippet emptyList(title: string)}
 	<div class="m-auto flex flex-col items-center text-center">
-		<Icon type="playlistMusic" class="color-onSecondaryContainer my-auto size-35 opacity-54" />
+		<Icon type="playlistMusic" class="text-onSecondaryContainer my-auto size-35 opacity-54" />
 
 		<div class="mb-4 text-body-lg">{title}</div>
 		<Button kind="outlined" as="a" href="/library/tracks">
@@ -200,7 +200,7 @@
 	<ScrollContainer
 		class={[
 			'flex h-dvh scroll-pt-(--app-header-height) flex-col overflow-auto contain-strict scrollbar-gutter-stable',
-			isCompact && player.animatedArtworkSrc && 'bg-black/60 backdrop-blur-3xl',
+			isCompact && player.animatedArtworkSrc && 'dark bg-black/60 backdrop-blur-3xl [color-scheme:dark]',
 		]}
 	>
 		<Header

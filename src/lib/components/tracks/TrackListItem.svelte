@@ -72,7 +72,7 @@
 	tabindex={-1}
 	class={[
 		'track-item-container group relative h-18 text-left',
-		active ? 'bg-onSurfaceVariant/10 text-onSurfaceVariant' : 'color-onSurfaceVariant',
+		active ? 'bg-onSurfaceVariant/10 text-onSurfaceVariant' : 'text-onSurfaceVariant',
 		className,
 		selected && 'bg-primary/5',
 		selectionHover && 'bg-tertiary/10',
@@ -152,7 +152,7 @@
 			lang={getItemLanguage(track.language)}
 		>
 			<div class="flex flex-col truncate">
-				<div class={[active ? 'text-primary' : 'color-onSurface', 'truncate']}>
+				<div class={[active ? 'text-primary' : 'text-onSurface', 'truncate']}>
 					{track.name}
 				</div>
 				<div class="truncate overflow-hidden">
