@@ -9,6 +9,7 @@
 		alt?: string
 		fallbackIcon?: IconType | false
 		noFallbackBg?: boolean
+		noAspectSquare?: boolean
 		children?: Snippet
 	}
 
@@ -17,6 +18,7 @@
 		animatedSrc,
 		fallbackIcon = 'musicNote',
 		noFallbackBg,
+		noAspectSquare,
 		class: className,
 		alt,
 		children,
@@ -56,7 +58,8 @@
 
 <div
 	class={[
-		'flex aspect-square overflow-hidden ring-1 ring-surfaceContainerHigh contain-strict',
+		'flex overflow-hidden ring-1 ring-surfaceContainerHigh contain-strict',
+		!noAspectSquare && 'aspect-square',
 		!noFallbackBg && 'bg-surfaceContainerHighest',
 		className,
 	]}

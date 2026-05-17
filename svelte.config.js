@@ -87,6 +87,8 @@ const config = {
 
 					// Apple
 					'https://itunes.apple.com',
+					'https://*.itunes.apple.com',
+					'https://mvod.itunes.apple.com',
 
 					// Deezer API
 					'https://api.deezer.com',
