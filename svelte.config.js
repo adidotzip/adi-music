@@ -33,13 +33,21 @@ const config = {
 			directives: {
 				'default-src': ['none'],
 
-				'script-src': ['self', 'https://gc.zgo.at/'],
+				'script-src': [
+					'self',
+					'https://gc.zgo.at/',
+				],
 
-				'style-src': ['self', 'unsafe-inline'],
+				'style-src': [
+					'self',
+					'unsafe-inline',
+				],
 
 				'img-src': [
 					'self',
 					'blob:',
+					'data:',
+
 					env.PUBLIC_GOAT_COUNTER_URL
 						? `${env.PUBLIC_GOAT_COUNTER_URL}/count`
 						: '',
@@ -54,21 +62,35 @@ const config = {
 					// Deezer
 					'https://e-cdns-images.dzcdn.net',
 					'https://cdn-images.dzcdn.net',
+
+					// TheAudioDB
+					'https://www.theaudiodb.com',
+					'https://r2.theaudiodb.com',
+
+					// Artwork proxy
+					'https://artwork.m8tec.top',
 				],
 
 				'media-src': [
 					'self',
 					'blob:',
 
+					// JioSaavn
 					'https://*.jiosaavncdn.com',
 					'https://*.saavncdn.com',
 
+					// Apple
 					'https://mvod.itunes.apple.com',
 					'https://*.itunes.apple.com',
 					'https://*.mzstatic.com',
+
+					// Deezer previews
+					'https://cdns-preview-*.dzcdn.net',
 				],
 
-				'font-src': ['self'],
+				'font-src': [
+					'self',
+				],
 
 				'connect-src': [
 					'self',
@@ -80,11 +102,14 @@ const config = {
 					'https://lyricsplus.prjktla.workers.dev',
 					'https://unison.boidu.dev',
 
-					// JioSaavn
+					// JioSaavn API
 					'https://jiosaavn-apix.arcadopredator.workers.dev',
 
-					// Artwork
+					// Artwork proxy
 					'https://artwork.m8tec.top',
+
+					// TheAudioDB API
+					'https://www.theaudiodb.com',
 
 					// Apple
 					'https://itunes.apple.com',
@@ -95,18 +120,45 @@ const config = {
 					'https://api.deezer.com',
 				],
 
-				'form-action': ['none'],
+				'worker-src': [
+					'self',
+					'blob:',
+				],
 
-				'manifest-src': ['self'],
+				'child-src': [
+					'self',
+					'blob:',
+				],
 
-				'base-uri': ['none'],
+				'object-src': [
+					'none',
+				],
+
+				'frame-ancestors': [
+					'none',
+				],
+
+				'form-action': [
+					'none',
+				],
+
+				'manifest-src': [
+					'self',
+				],
+
+				'base-uri': [
+					'none',
+				],
 			},
 		},
 
 		typescript: {
 			config: (tsConfig) => {
 				tsConfig.extends = '../../tsconfig.base.json'
-				tsConfig.include.push('../paraglide/**/*')
+
+				tsConfig.include.push(
+					'../paraglide/**/*',
+				)
 
 				return tsConfig
 			},
@@ -114,6 +166,10 @@ const config = {
 
 		serviceWorker: {
 			register: false,
+		},
+
+		prerender: {
+			handleHttpError: 'warn',
 		},
 	},
 }
