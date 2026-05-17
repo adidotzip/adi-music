@@ -65,6 +65,7 @@ const config = {
 
 					'https://mvod.itunes.apple.com',
 					'https://*.itunes.apple.com',
+					'https://*.mzstatic.com',
 				],
 
 				'font-src': ['self'],
