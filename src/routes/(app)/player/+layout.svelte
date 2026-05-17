@@ -26,6 +26,7 @@
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import { clearPlayHistory, dbRemoveFromPlayHistory } from '$lib/library/play-history-actions.js'
 	import { getLayoutProps } from './layout-props.ts'
+	import { fade } from 'svelte/transition'
 
 	const { data } = $props()
 
@@ -52,24 +53,40 @@
 	const { isCompact, isCompactHorizontal, isCompactVertical, layoutMode } = $derived(
 		getLayoutProps(page.route.id),
 	)
+
+	let backgroundSrc = $state<string | undefined>()
+	let backgroundAnimatedSrc = $state<string | undefined>()
+
+	$effect(() => {
+		backgroundSrc = player.artworkSrc
+		backgroundAnimatedSrc = isCompact
+			? (player.animatedArtworkTallSrc ?? player.animatedArtworkSrc)
+			: player.animatedArtworkSrc
+	})
 </script>
 
-{#if player.animatedArtworkSrc}
-	<div class="fixed inset-0 -z-1 overflow-hidden pointer-events-none">
-		<Artwork
-			src={undefined}
-			animatedSrc={isCompact ? (player.animatedArtworkTallSrc ?? player.animatedArtworkSrc) : player.animatedArtworkSrc}
-			noAspectSquare
-			class={[
-				"size-full object-cover",
-				!isCompact && "blur-3xl opacity-50 scale-110"
-			]}
-		/>
-		{#if isCompact}
-			<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
-		{/if}
-	</div>
-{/if}
+<div class="fixed inset-0 -z-1 overflow-hidden pointer-events-none">
+	{#key backgroundAnimatedSrc || backgroundSrc}
+		<div
+			class="absolute inset-0"
+			in:fade={{ duration: 800 }}
+			out:fade={{ duration: 800 }}
+		>
+			<Artwork
+				src={backgroundAnimatedSrc ? undefined : backgroundSrc}
+				animatedSrc={backgroundAnimatedSrc}
+				noAspectSquare
+				class={[
+					'size-full object-cover',
+					!isCompact && 'blur-3xl opacity-50 scale-110',
+				]}
+			/>
+			{#if isCompact && (backgroundAnimatedSrc || backgroundSrc)}
+				<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
+			{/if}
+		</div>
+	{/key}
+</div>
 
 {#snippet playerSnippet()}
 	<div
@@ -94,9 +111,12 @@
 			<div class="w-10"></div>
 		</div>
 
-		{#if !isCompact || !player.animatedArtworkSrc}
+		{#if !(isCompact && player.animatedArtworkSrc)}
 			<PlayerArtwork
-				class="m-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary [grid-area:artwork] active-view-player:view-name-[pl-artwork]"
+				class={[
+					'm-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary [grid-area:artwork] active-view-player:view-name-[pl-artwork]',
+					player.playing && !isCompact && 'playing-animation',
+				]}
 			/>
 		{:else}
 			<div class="[grid-area:artwork]"></div>
@@ -371,6 +391,23 @@
 			height: var(--mp-height);
 			translate: var(--mp-left) calc(var(--mp-bottom) - var(--mp-height));
 		}
+	}
+
+	@keyframes artwork-pulse {
+		0%,
+		100% {
+			transform: scale(1);
+			box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+		}
+		50% {
+			transform: scale(1.04);
+			box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.2), 0 8px 10px -6px rgb(0 0 0 / 0.2);
+		}
+	}
+
+	.playing-animation {
+		animation: artwork-pulse 8s ease-in-out infinite;
+		transition: transform 0.8s var(--ease-standard);
 	}
 
 	:global(html:active-view-transition-type(player)) {

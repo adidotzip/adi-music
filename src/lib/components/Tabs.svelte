@@ -29,7 +29,7 @@
 			{@attach ripple()}
 			type="button"
 			style="grid-area: 1/ {index + 1};"
-			class="relative min-w-20 cursor-pointer overflow-clip rounded-full px-4 py-2"
+			class="relative min-w-18 cursor-pointer overflow-clip rounded-full px-2 py-2 text-label-lg @xs:min-w-20 @xs:px-4"
 			aria-selected={index === selectedIndex}
 			role="tab"
 			onclick={() => onchange(item, index)}

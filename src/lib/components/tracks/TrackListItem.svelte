@@ -152,10 +152,15 @@
 			lang={getItemLanguage(track.language)}
 		>
 			<div class="flex flex-col truncate">
-				<div class={[active ? 'text-primary' : 'color-onSurface', 'truncate']}>
+				<div
+					class={[
+						active ? 'text-primary' : 'color-onSurface',
+						'truncate font-medium @md:font-normal',
+					]}
+				>
 					{track.name}
 				</div>
-				<div class="truncate overflow-hidden">
+				<div class="truncate overflow-hidden opacity-80 @md:opacity-100">
 					{formatArtists(track.artists)}
 				</div>
 			</div>
