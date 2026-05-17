@@ -198,7 +198,10 @@
 		so we can't use root scroller here.
 	-->
 	<ScrollContainer
-		class="flex h-dvh scroll-pt-(--app-header-height) flex-col overflow-auto contain-strict scrollbar-gutter-stable"
+		class={[
+			'flex h-dvh scroll-pt-(--app-header-height) flex-col overflow-auto contain-strict scrollbar-gutter-stable',
+			isCompact && player.animatedArtworkSrc && 'bg-black/60 backdrop-blur-3xl',
+		]}
 	>
 		<Header
 			mode="sticky"
