@@ -58,6 +58,11 @@ export class EqualizerStore {
 		$effect(() => {
 			const enabled = this.enabled
 			const bands = this.bands
+
+			if (enabled) {
+				this.resumeContext()
+			}
+
 			if (this.#filters.length === 0) {
 				return
 			}
@@ -103,6 +108,10 @@ export class EqualizerStore {
 	}
 
 	resumeContext = (): Promise<void> => {
+		if (!this.enabled) {
+			return Promise.resolve()
+		}
+
 		const audioContext = this.#ensureAudioGraph()
 		if (audioContext.state === 'suspended') {
 			return audioContext.resume()
