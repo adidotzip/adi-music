@@ -153,6 +153,7 @@ export class PlayerStore {
 			})
 
 			if (track) {
+				this.animatedArtworkSrc = undefined
 				const artist = (track.artists[0] as string) ?? ''
 				if (artist === UNKNOWN_ITEM) {
 					this.animatedArtworkSrc = undefined
