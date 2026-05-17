@@ -3,9 +3,11 @@ import { createManagedArtwork } from '$lib/helpers/create-managed-artwork.svelte
 import { persist } from '$lib/helpers/persist.svelte.ts'
 import { clamp } from '$lib/helpers/utils/clamp.ts'
 import { debounce } from '$lib/helpers/utils/debounce.ts'
+import { getAnimatedArtwork } from '$lib/helpers/animated-artwork.ts'
 import { formatArtists, truncate } from '$lib/helpers/utils/text.ts'
 import { throttle } from '$lib/helpers/utils/throttle.ts'
 import { createTrackQuery, type TrackData } from '$lib/library/get/value-queries.ts'
+import { UNKNOWN_ITEM } from '$lib/library/types.ts'
 import { dbAddToPlayHistory } from '$lib/library/play-history-actions.ts'
 import { AudioLoader } from './audio-loader.svelte.ts'
 import { EqualizerStore } from './equalizer.svelte.ts'
@@ -74,6 +76,7 @@ export class PlayerStore {
 
 	#artwork = createManagedArtwork(() => this.activeTrack?.image?.full)
 	artworkSrc: string | undefined = $derived.by(this.#artwork)
+	animatedArtworkSrc: string | undefined = $state()
 
 	constructor() {
 		persist('player', this, ['volume', 'repeat', 'muted', 'playbackRate', 'preservePitch'])
@@ -148,6 +151,26 @@ export class PlayerStore {
 			untrack(() => {
 				trackChanged(track)
 			})
+
+			if (track) {
+				const artist = (track.artists[0] as string) ?? ''
+				if (artist === UNKNOWN_ITEM) {
+					this.animatedArtworkSrc = undefined
+					return
+				}
+				getAnimatedArtwork(artist, track.album)
+					.then((url) => {
+						if (this.activeTrack?.id === track.id) {
+							this.animatedArtworkSrc = url
+						}
+					})
+					.catch((error) => {
+						console.error('Failed to get animated artwork', error)
+						this.animatedArtworkSrc = undefined
+					})
+			} else {
+				this.animatedArtworkSrc = undefined
+			}
 		})
 
 		// Guarded by loading: prevents play() on an empty/stale src during file fetch.

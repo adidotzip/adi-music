@@ -14,6 +14,7 @@
 	import PlayTogglePillButton from '$lib/components/player/buttons/PlayTogglePillButton.svelte'
 	import RepeatButton from '$lib/components/player/buttons/RepeatButton.svelte'
 	import ShuffleButton from '$lib/components/player/buttons/ShuffleButton.svelte'
+	import Artwork from '$lib/components/Artwork.svelte'
 	import PlayerArtwork from '$lib/components/player/PlayerArtwork.svelte'
 	import SyncedLyrics from '$lib/components/player/SyncedLyrics.svelte'
 	import Timeline from '$lib/components/player/Timeline.svelte'
@@ -48,17 +49,34 @@
 	})
 	const isSelectedTabQueue = $derived(selectedDetailsTab === 0)
 
-	const { isCompactHorizontal, isCompactVertical, layoutMode } = $derived(
+	const { isCompact, isCompactHorizontal, isCompactVertical, layoutMode } = $derived(
 		getLayoutProps(page.route.id),
 	)
 </script>
+
+{#if player.animatedArtworkSrc}
+	<div class="fixed inset-0 -z-1 overflow-hidden pointer-events-none">
+		<Artwork
+			src={undefined}
+			animatedSrc={player.animatedArtworkSrc}
+			class={[
+				"size-full object-cover",
+				!isCompact && "blur-3xl opacity-50 scale-110"
+			]}
+		/>
+		{#if isCompact}
+			<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
+		{/if}
+	</div>
+{/if}
 
 {#snippet playerSnippet()}
 	<div
 		class={[
 			layoutMode === 'both' && 'w-100 2xl:w-[28dvw]',
 			layoutMode === 'list' && 'mx-auto w-full',
-			'player-content z-0 grow items-center gap-x-6 overflow-clip bg-secondaryContainerVariant px-2 pb-2',
+			'player-content z-0 grow items-center gap-x-6 overflow-clip px-2 pb-2',
+			player.animatedArtworkSrc ? 'bg-transparent' : 'bg-secondaryContainerVariant',
 			isCompactVertical && !isCompactHorizontal && 'player-content-horizontal',
 		]}
 	>
@@ -75,9 +93,13 @@
 			<div class="w-10"></div>
 		</div>
 
-		<PlayerArtwork
-			class="m-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary [grid-area:artwork] active-view-player:view-name-[pl-artwork]"
-		/>
+		{#if !isCompact || !player.animatedArtworkSrc}
+			<PlayerArtwork
+				class="m-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary [grid-area:artwork] active-view-player:view-name-[pl-artwork]"
+			/>
+		{:else}
+			<div class="[grid-area:artwork]"></div>
+		{/if}
 
 		<div class="mt-2 flex w-full flex-col gap-2 [grid-area:controls]">
 			<div class="w-full rounded-2xl bg-surfaceContainerHighest px-4 py-2">
@@ -287,7 +309,7 @@
 	mode={layoutMode}
 	class={[
 		'grow active-view-player:view-name-[pl-card]',
-		layoutMode === 'both' && 'bg-secondaryContainer',
+		layoutMode === 'both' && !player.animatedArtworkSrc && 'bg-secondaryContainer',
 	]}
 	list={playerSnippet}
 	details={queueSnippet}
