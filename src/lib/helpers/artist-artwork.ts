@@ -10,6 +10,8 @@ const pendingRequests = new Map<string, Promise<string | undefined>>()
 const getStorageKey = (artist: string) =>
 	`snaeplayer-artist-artwork.${artist}`
 
+const DEFAULT_IMAGE = 'https://www.jiosaavn.com/_i/3.0/artist-default-music.png'
+
 // --------------------
 // Fixed Type Definitions matching JioSaavn Data Shape
 // --------------------
@@ -77,6 +79,34 @@ const safeGetStorage = (key: string): CachedArtwork | null => {
 }
 
 // --------------------
+// Artwork Resolution Helpers
+// --------------------
+
+/** Picks the best (highest-quality, non-placeholder) image URL from a JioSaavn image array. */
+const resolveBestImage = (images: JioSaavnImageNode[]): string | undefined => {
+	if (!Array.isArray(images) || images.length === 0) return undefined
+
+	// Iterate from highest quality (end of array) to lowest
+	for (let i = images.length - 1; i >= 0; i--) {
+		const url = images[i]?.url
+		if (url && url !== DEFAULT_IMAGE) return url
+	}
+
+	return undefined
+}
+
+/** Finds the best artist match: exact name first, then falls back to first result. */
+const resolveBestMatch = (
+	results: JioSaavnArtist[],
+	artist: string,
+): JioSaavnArtist | undefined => {
+	if (results.length === 0) return undefined
+
+	const needle = artist.trim().toLowerCase()
+	return results.find((r) => r.name?.toLowerCase() === needle) ?? results[0]
+}
+
+// --------------------
 // Main
 // --------------------
 
@@ -125,8 +155,7 @@ export const getArtistArtwork = async (
 
 					if (
 						cachedAgain.type === 'none' &&
-						Date.now() - cachedAgain.timestamp <
-							NONE_CACHE_DURATION
+						Date.now() - cachedAgain.timestamp < NONE_CACHE_DURATION
 					) {
 						return undefined
 					}
@@ -136,19 +165,11 @@ export const getArtistArtwork = async (
 
 				try {
 					const baseUrl =
-						typeof window !== 'undefined'
-							? window.location.origin
-							: ''
+						typeof window !== 'undefined' ? window.location.origin : ''
 
 					const response = await fetch(
-						`${baseUrl}/api/artist-art?artist=${encodeURIComponent(
-							artist,
-						)}`,
-						{
-							headers: {
-								Accept: 'application/json',
-							},
-						},
+						`${baseUrl}/api/artist-art?artist=${encodeURIComponent(artist)}`,
+						{ headers: { Accept: 'application/json' } },
 					)
 
 					if (!response.ok) {
@@ -156,11 +177,7 @@ export const getArtistArtwork = async (
 							`[Artwork] API returned ${response.status} for "${artist}"`,
 						)
 
-						safeSetStorage(key, {
-							type: 'none',
-							timestamp: Date.now(),
-						})
-
+						safeSetStorage(key, { type: 'none', timestamp: Date.now() })
 						return undefined
 					}
 
@@ -175,11 +192,7 @@ export const getArtistArtwork = async (
 								`[Artwork] HTML returned instead of JSON for "${artist}"`,
 							)
 
-							safeSetStorage(key, {
-								type: 'none',
-								timestamp: Date.now(),
-							})
-
+							safeSetStorage(key, { type: 'none', timestamp: Date.now() })
 							return undefined
 						}
 
@@ -190,33 +203,19 @@ export const getArtistArtwork = async (
 							parseError,
 						)
 
-						safeSetStorage(key, {
-							type: 'none',
-							timestamp: Date.now(),
-						})
-
+						safeSetStorage(key, { type: 'none', timestamp: Date.now() })
 						return undefined
 					}
 
-					// Fixed layout verification matching: apiRes.data.results
-					if (apiRes.success && apiRes.data?.results && apiRes.data.results.length > 0) {
-						const bestMatch = apiRes.data.results[0]
-
-						if (bestMatch && Array.isArray(bestMatch.image) && bestMatch.image.length > 0) {
-							// Pull the 500x500 high-res artwork layout sitting at the end of the array
-							const highResNode = bestMatch.image[bestMatch.image.length - 1]
-							bestImage = highResNode.url
+					if (apiRes.success && apiRes.data?.results) {
+						const match = resolveBestMatch(apiRes.data.results, artist)
+						if (match) {
+							bestImage = resolveBestImage(match.image)
 						}
 					}
 				} catch (networkError: any) {
-					const errorName =
-						networkError?.name || 'Unknown Error'
-
-					const errorMessage =
-						networkError?.message || 'No message provided'
-
 					console.error(
-						`[Network Error] ${artist}: ${errorName} - ${errorMessage}`,
+						`[Network Error] ${artist}: ${networkError?.name ?? 'Unknown'} - ${networkError?.message ?? 'No message'}`,
 						networkError,
 					)
 
@@ -233,11 +232,7 @@ export const getArtistArtwork = async (
 					return bestImage
 				}
 
-				safeSetStorage(key, {
-					type: 'none',
-					timestamp: Date.now(),
-				})
-
+				safeSetStorage(key, { type: 'none', timestamp: Date.now() })
 				return undefined
 			})
 		} finally {
