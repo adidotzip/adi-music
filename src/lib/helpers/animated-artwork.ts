@@ -1,16 +1,47 @@
 import { SerialQueue } from './serial-queue.ts'
 
 const getStorageKey = (artist: string, album: string, title?: string) =>
-	`snaeplayer-animated-artwork-v2.${artist}:${album}${title ? `:${title}` : ''}`
+	`snaeplayer-animated-artwork-v3.${artist}:${album}${title ? `:${title}` : ''}`
 
 const queue = new SerialQueue()
+
+const NONE_CACHE_DURATION = 1000 * 60 * 30 // 30 mins
 
 export interface AnimatedArtwork {
 	url: string
 	urlTall?: string
 }
 
+type CachedArtwork =
+	| {
+			type: 'image'
+			value: AnimatedArtwork
+			timestamp: number
+	  }
+	| {
+			type: 'none'
+			timestamp: number
+	  }
+
 const pendingRequests = new Map<string, Promise<AnimatedArtwork | undefined>>()
+
+const safeSetStorage = (key: string, value: CachedArtwork) => {
+	try {
+		localStorage.setItem(key, JSON.stringify(value))
+	} catch (error) {
+		console.warn(`[Storage Warning] Failed to cache ${key}`, error)
+	}
+}
+
+const safeGetStorage = (key: string): CachedArtwork | null => {
+	try {
+		const raw = localStorage.getItem(key)
+		if (!raw) return null
+		return JSON.parse(raw) as CachedArtwork
+	} catch {
+		return null
+	}
+}
 
 export const getAnimatedArtwork = async (
 	artist: string,
@@ -18,13 +49,14 @@ export const getAnimatedArtwork = async (
 	title?: string,
 ): Promise<AnimatedArtwork | undefined> => {
 	const key = getStorageKey(artist, album, title)
-	const cached = localStorage.getItem(key)
+	const cached = safeGetStorage(key)
+
 	if (cached) {
-		if (cached === 'none') return undefined
-		try {
-			return JSON.parse(cached)
-		} catch {
-			return { url: cached }
+		if (cached.type === 'image') {
+			return cached.value
+		}
+		if (cached.type === 'none' && Date.now() - cached.timestamp < NONE_CACHE_DURATION) {
+			return undefined
 		}
 	}
 
@@ -37,9 +69,14 @@ export const getAnimatedArtwork = async (
 		try {
 			return await queue.enqueue(async () => {
 				// Re-check cache in case it was populated while waiting in queue
-				const cached = localStorage.getItem(key)
+				const cached = safeGetStorage(key)
 				if (cached) {
-					return cached === 'none' ? undefined : cached
+					if (cached.type === 'image') {
+						return cached.value
+					}
+					if (cached.type === 'none' && Date.now() - cached.timestamp < NONE_CACHE_DURATION) {
+						return undefined
+					}
 				}
 
 				try {
@@ -54,7 +91,10 @@ export const getAnimatedArtwork = async (
 
 					if (!response.ok) {
 						if (response.status === 404) {
-							localStorage.setItem(key, 'none')
+							safeSetStorage(key, {
+								type: 'none',
+								timestamp: Date.now(),
+							})
 						}
 						return undefined
 					}
@@ -65,14 +105,20 @@ export const getAnimatedArtwork = async (
 							url: data.url,
 							urlTall: data.url_tall,
 						}
-						localStorage.setItem(key, JSON.stringify(result))
+						safeSetStorage(key, {
+							type: 'image',
+							value: result,
+							timestamp: Date.now(),
+						})
 						return result
 					}
 
-					localStorage.setItem(key, 'none')
+					safeSetStorage(key, {
+						type: 'none',
+						timestamp: Date.now(),
+					})
 				} catch (error) {
 					console.error('Failed to fetch animated artwork', error)
-					localStorage.setItem(key, 'none')
 				}
 
 				return undefined
