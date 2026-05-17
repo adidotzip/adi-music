@@ -26,6 +26,9 @@
 	import { formatArtists, getItemLanguage } from '$lib/helpers/utils/text.ts'
 	import { clearPlayHistory, dbRemoveFromPlayHistory } from '$lib/library/play-history-actions.js'
 	import { getLayoutProps } from './layout-props.ts'
+	
+	// Import Svelte transitions
+	import { fade, fly } from 'svelte/transition'
 
 	const { data } = $props()
 
@@ -55,20 +58,26 @@
 </script>
 
 {#if player.animatedArtworkSrc}
-	<div class="fixed inset-0 -z-1 overflow-hidden pointer-events-none">
-		<Artwork
-			src={undefined}
-			animatedSrc={isCompact ? (player.animatedArtworkTallSrc ?? player.animatedArtworkSrc) : player.animatedArtworkSrc}
-			noAspectSquare
-			class={[
-				"size-full object-cover",
-				!isCompact && "blur-3xl opacity-50 scale-110"
-			]}
-		/>
-		{#if isCompact}
-			<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
-		{/if}
-	</div>
+	{#key activeTrack?.id}
+		<div
+			class="fixed inset-0 -z-1 overflow-hidden pointer-events-none"
+			in:fade={{ duration: 600 }}
+			out:fade={{ duration: 600 }}
+		>
+			<Artwork
+				src={undefined}
+				animatedSrc={isCompact ? (player.animatedArtworkTallSrc ?? player.animatedArtworkSrc) : player.animatedArtworkSrc}
+				noAspectSquare
+				class={[
+					"size-full object-cover",
+					!isCompact && "blur-3xl opacity-50 scale-110"
+				]}
+			/>
+			{#if isCompact}
+				<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
+			{/if}
+		</div>
+	{/key}
 {/if}
 
 {#snippet playerSnippet()}
@@ -94,13 +103,22 @@
 			<div class="w-10"></div>
 		</div>
 
-		{#if !isCompact || !player.animatedArtworkSrc}
-			<PlayerArtwork
-				class="m-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary [grid-area:artwork] active-view-player:view-name-[pl-artwork]"
-			/>
-		{:else}
-			<div class="[grid-area:artwork]"></div>
-		{/if}
+		<!-- Wrap Artwork in a relative container to handle absolute transition children -->
+		<div class="relative flex items-center justify-center [grid-area:artwork] h-full w-full">
+			{#if !isCompact || !player.animatedArtworkSrc}
+				{#key activeTrack?.id}
+					<div
+						class="absolute inset-0 m-auto flex items-center justify-center"
+						in:fade={{ duration: 300, delay: 150 }}
+						out:fade={{ duration: 150 }}
+					>
+						<PlayerArtwork
+							class="m-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary active-view-player:view-name-[pl-artwork]"
+						/>
+					</div>
+				{/key}
+			{/if}
+		</div>
 
 		<div class="mt-2 flex w-full flex-col gap-2 [grid-area:controls]">
 			<div class="w-full rounded-2xl bg-surfaceContainerHighest px-4 py-2">
@@ -145,18 +163,29 @@
 			</div>
 
 			<div class="flex h-18 w-full shrink-0 items-center rounded-2xl bg-secondaryContainer px-4">
-				{#if activeTrack}
-					<div class="mr-2 min-w-6 text-center text-body-lg tabular-nums">
-						{player.activeTrackIndex + 1}
-					</div>
+				<!-- Relative container to prevent layout shifting during track text transition -->
+				<div class="relative flex h-full grow items-center overflow-hidden">
+					{#if activeTrack}
+						{#key activeTrack.id}
+							<div
+								class="absolute flex w-full items-center"
+								in:fly={{ y: 20, duration: 300, delay: 150 }}
+								out:fly={{ y: -20, duration: 150 }}
+							>
+								<div class="mr-2 min-w-6 text-center text-body-lg tabular-nums">
+									{player.activeTrackIndex + 1}
+								</div>
 
-					<div class="grid overflow-hidden" lang={getItemLanguage(activeTrack.language)}>
-						<div class="truncate text-body-lg">{activeTrack.name}</div>
-						<div class="truncate text-body-md">{formatArtists(activeTrack.artists)}</div>
-					</div>
-				{/if}
+								<div class="grid overflow-hidden" lang={getItemLanguage(activeTrack.language)}>
+									<div class="truncate text-body-lg">{activeTrack.name}</div>
+									<div class="truncate text-body-md">{formatArtists(activeTrack.artists)}</div>
+								</div>
+							</div>
+						{/key}
+					{/if}
+				</div>
 
-				<div class="ml-auto flex gap-1">
+				<div class="relative z-10 ml-auto flex gap-1 bg-secondaryContainer pl-2">
 					<PlayerFavoriteButton />
 
 					<IconButton
