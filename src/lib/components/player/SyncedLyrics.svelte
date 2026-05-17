@@ -246,7 +246,7 @@
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
-	<div class="empty-state z-10 m-auto flex h-full max-w-80 flex-col items-center justify-center text-center opacity-50 transition-opacity duration-500">
+	<div class="empty-state z-20 m-auto flex h-full max-w-80 flex-col items-center justify-center text-center opacity-50 transition-opacity duration-500 relative">
 		<Icon name={icon} class="mb-4 h-12 w-12 text-white/40" />
 		<h3 class="text-xl font-bold text-white">{title}</h3>
 		<p class="mt-2 text-sm text-white/60">{description}</p>
@@ -254,15 +254,18 @@
 {/snippet}
 
 <section class={["lyrics-shell w-full h-full relative overflow-hidden", !player.animatedArtworkSrc && "bg-black", className]} aria-live="polite">
+	<!-- Background Blur Overlay for Readability -->
+	<div class="absolute inset-0 z-0 bg-black/40 backdrop-blur-2xl pointer-events-none"></div>
+
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track Playing', 'Play a track to follow along with the lyrics.')}
 	{:else if loading}
-		<div class="flex h-full w-full items-center justify-center">
+		<div class="relative z-10 flex h-full w-full items-center justify-center">
 			<Spinner class="h-8 w-8 text-white/50" />
 		</div>
 	{:else if result?.status === 'found'}
 		<div
-			class="lyrics-container absolute inset-0 h-full w-full"
+			class="lyrics-container absolute inset-0 z-10 h-full w-full"
 			role="region"
 			aria-label="Lyrics"
 			bind:this={containerElement}
@@ -472,12 +475,12 @@
 	}
 
 	.lyric-word {
-		/* Switched from inline-block to inline to restore kerning and prevent box-breaking */
-		display: inline;
+		/* Switched back to inline-block to allow transforms for the bounce */
+		display: inline-block;
 		position: relative;
 		white-space: pre-wrap;
-		-webkit-box-decoration-break: clone;
-		box-decoration-break: clone;
+		transform: translateY(0);
+		will-change: transform;
 	}
 
 	.lyric-line.active .lyric-word {
@@ -491,6 +494,13 @@
 		-webkit-background-clip: text;
 		background-clip: text;
 		color: transparent;
+		/* Maps the progress (0-100) to an upward lift up to -0.1em */
+		transform: translateY(calc(-0.1em * (var(--word-progress) / 100)));
+	}
+	
+	.lyric-line.past .lyric-word {
+		/* Ensure past lines remain consistently elevated if fully sung */
+		transform: translateY(-0.1em);
 	}
 
 	.lyric-line.active .lyric-word.secondary-word {
