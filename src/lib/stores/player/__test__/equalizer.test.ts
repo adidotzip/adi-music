@@ -73,6 +73,7 @@ describe('EqualizerStore', () => {
 		const store = new EqualizerStore({} as HTMLAudioElement)
 		expect(instances).toHaveLength(0)
 
+		store.enabled = true
 		await store.resumeContext()
 
 		expect(instances).toHaveLength(1)
@@ -84,6 +85,7 @@ describe('EqualizerStore', () => {
 		const { instances } = setupAudioContextMock('suspended')
 		const store = new EqualizerStore({} as HTMLAudioElement)
 
+		store.enabled = true
 		await store.resumeContext()
 		await store.resumeContext()
 
@@ -95,6 +97,7 @@ describe('EqualizerStore', () => {
 		const { instances } = setupAudioContextMock('running')
 		const store = new EqualizerStore({} as HTMLAudioElement)
 
+		store.enabled = true
 		await store.resumeContext()
 
 		expect(instances[0]?.resume).not.toHaveBeenCalled()
