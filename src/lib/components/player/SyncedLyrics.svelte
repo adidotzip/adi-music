@@ -246,24 +246,19 @@
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
-	<div
-		class="empty-state z-10 m-auto flex h-full max-w-80 flex-col items-center justify-center text-center opacity-50 transition-opacity duration-500"
-	>
-		<Icon type={icon} class="text-onSurface/40 mb-4 h-12 w-12" />
-		<h3 class="text-onSurface text-xl font-bold">{title}</h3>
-		<p class="text-onSurface/60 mt-2 text-sm">{description}</p>
+	<div class="empty-state z-10 m-auto flex h-full max-w-80 flex-col items-center justify-center text-center opacity-50 transition-opacity duration-500">
+		<Icon type={icon} class="mb-4 h-12 w-12 text-white/40" />
+		<h3 class="text-xl font-bold text-white">{title}</h3>
+		<p class="mt-2 text-sm text-white/60">{description}</p>
 	</div>
 {/snippet}
 
-<section
-	class={['lyrics-shell relative h-full w-full overflow-hidden', className]}
-	aria-live="polite"
->
+<section class={["lyrics-shell w-full h-full relative overflow-hidden", !player.animatedArtworkSrc && "bg-black", className]} aria-live="polite">
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track Playing', 'Play a track to follow along with the lyrics.')}
 	{:else if loading}
 		<div class="flex h-full w-full items-center justify-center">
-			<Spinner class="text-onSurface/50 h-8 w-8" />
+			<Spinner class="h-8 w-8 text-white/50" />
 		</div>
 	{:else if result?.status === 'found'}
 		<div
@@ -425,20 +420,15 @@
 	.lyric-line {
 		font-family: var(--font-sans);
 		font-size: 2.15rem;
-		@media (min-width: 640px) {
-			font-size: 2.75rem;
-		}
-		@media (min-width: 1024px) {
-			font-size: 3.5rem;
-		}
+		@media (min-width: 640px) { font-size: 2.75rem; }
+		@media (min-width: 1024px) { font-size: 3.5rem; }
 		font-weight: 800;
 		line-height: 1.2;
 		letter-spacing: -0.02em;
 		white-space: pre-wrap;
-		color: var(--color-onSurface);
+		color: #fff;
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
-		text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 	}
 
 	.lyric-item:hover {
@@ -468,20 +458,16 @@
 
 	.lyric-line.secondary-line {
 		font-size: 1.5rem;
-		@media (min-width: 640px) {
-			font-size: 1.85rem;
-		}
-		@media (min-width: 1024px) {
-			font-size: 2.5rem;
-		}
+		@media (min-width: 640px) { font-size: 1.85rem; }
+		@media (min-width: 1024px) { font-size: 2.5rem; }
 		font-weight: 600;
 		font-style: italic;
-		color: color-mix(in srgb, var(--color-onSurface) 60%, transparent);
+		color: rgba(255, 255, 255, 0.6);
 	}
 
 	.lyric-word.secondary-word {
-		font-size: 0.85em;
-		color: color-mix(in srgb, var(--color-onSurface) 60%, transparent);
+		font-size: 0.85em; 
+		color: rgba(255, 255, 255, 0.6);
 		font-style: italic;
 	}
 
@@ -497,10 +483,10 @@
 	.lyric-line.active .lyric-word {
 		background: linear-gradient(
 			to right,
-			var(--color-onSurface) 0%,
-			var(--color-onSurface) var(--word-progress),
-			color-mix(in srgb, var(--color-onSurface) 30%, transparent) calc(var(--word-progress) + 5%),
-			color-mix(in srgb, var(--color-onSurface) 30%, transparent) 100%
+			#ffffff 0%,
+			#ffffff var(--word-progress),
+			rgba(255, 255, 255, 0.3) calc(var(--word-progress) + 5%),
+			rgba(255, 255, 255, 0.3) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -510,10 +496,10 @@
 	.lyric-line.active .lyric-word.secondary-word {
 		background: linear-gradient(
 			to right,
-			color-mix(in srgb, var(--color-onSurface) 85%, transparent) 0%,
-			color-mix(in srgb, var(--color-onSurface) 85%, transparent) var(--word-progress),
-			color-mix(in srgb, var(--color-onSurface) 15%, transparent) calc(var(--word-progress) + 5%),
-			color-mix(in srgb, var(--color-onSurface) 15%, transparent) 100%
+			rgba(255, 255, 255, 0.85) 0%,
+			rgba(255, 255, 255, 0.85) var(--word-progress),
+			rgba(255, 255, 255, 0.15) calc(var(--word-progress) + 5%),
+			rgba(255, 255, 255, 0.15) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -534,13 +520,13 @@
 		width: 10px;
 		height: 10px;
 		border-radius: 50%;
-		background-color: color-mix(in srgb, var(--color-onSurface) 15%, transparent);
+		background-color: rgba(255, 255, 255, 0.15);
 		transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 		transform: scale(1);
 	}
 
 	.dot.filled {
-		background-color: var(--color-onSurface);
+		background-color: #ffffff;
 		transform: scale(1.5);
 	}
 </style>

@@ -54,25 +54,21 @@
 	)
 </script>
 
-{#if player.activeTrack}
-	{#key player.activeTrack.id}
-		<div
-			class="fixed inset-0 -z-1 overflow-hidden pointer-events-none"
-			transition:fade={{ duration: 800 }}
-		>
-			<Artwork
-				src={player.artworkSrc}
-				animatedSrc={isCompact
-					? (player.animatedArtworkTallSrc ?? player.animatedArtworkSrc)
-					: player.animatedArtworkSrc}
-				noAspectSquare
-				class={['size-full object-cover', !isCompact && 'scale-110 opacity-50 blur-3xl']}
-			/>
-			{#if isCompact}
-				<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
-			{/if}
-		</div>
-	{/key}
+{#if player.animatedArtworkSrc}
+	<div class="fixed inset-0 -z-1 overflow-hidden pointer-events-none">
+		<Artwork
+			src={undefined}
+			animatedSrc={isCompact ? (player.animatedArtworkTallSrc ?? player.animatedArtworkSrc) : player.animatedArtworkSrc}
+			noAspectSquare
+			class={[
+				"size-full object-cover",
+				!isCompact && "blur-3xl opacity-50 scale-110"
+			]}
+		/>
+		{#if isCompact}
+			<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
+		{/if}
+	</div>
 {/if}
 
 {#snippet playerSnippet()}
@@ -81,7 +77,7 @@
 			layoutMode === 'both' && 'w-100 2xl:w-[28dvw]',
 			layoutMode === 'list' && 'mx-auto w-full',
 			'player-content z-0 grow items-center gap-x-6 overflow-clip px-2 pb-2',
-			player.activeTrack ? 'bg-transparent' : 'bg-secondaryContainerVariant',
+			player.animatedArtworkSrc ? 'bg-transparent' : 'bg-secondaryContainerVariant',
 			isCompactVertical && !isCompactHorizontal && 'player-content-horizontal',
 		]}
 	>
@@ -98,22 +94,13 @@
 			<div class="w-10"></div>
 		</div>
 
-		{#key player.activeTrack?.id}
-			<div
-				class="contents"
-				transition:fade={{ duration: 400 }}
-				style:grid-area="artwork"
-				style:display="grid"
-			>
-				{#if !isCompact || !player.animatedArtworkSrc}
-					<PlayerArtwork
-						class="m-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary [grid-area:artwork] active-view-player:view-name-[pl-artwork]"
-					/>
-				{:else}
-					<div class="[grid-area:artwork]"></div>
-				{/if}
-			</div>
-		{/key}
+		{#if !isCompact || !player.animatedArtworkSrc}
+			<PlayerArtwork
+				class="m-auto my-auto h-full max-h-75 rounded-2xl bg-onSecondary [grid-area:artwork] active-view-player:view-name-[pl-artwork]"
+			/>
+		{:else}
+			<div class="[grid-area:artwork]"></div>
+		{/if}
 
 		<div class="mt-2 flex w-full flex-col gap-2 [grid-area:controls]">
 			<div class="w-full rounded-2xl bg-surfaceContainerHighest px-4 py-2">
@@ -158,20 +145,16 @@
 			</div>
 
 			<div class="flex h-18 w-full shrink-0 items-center rounded-2xl bg-secondaryContainer px-4">
-				{#key player.activeTrack?.id}
-					<div class="flex items-center overflow-hidden" transition:fade={{ duration: 400 }}>
-						{#if activeTrack}
-							<div class="mr-2 min-w-6 text-center text-body-lg tabular-nums">
-								{player.activeTrackIndex + 1}
-							</div>
-
-							<div class="grid overflow-hidden" lang={getItemLanguage(activeTrack.language)}>
-								<div class="truncate text-body-lg">{activeTrack.name}</div>
-								<div class="truncate text-body-md">{formatArtists(activeTrack.artists)}</div>
-							</div>
-						{/if}
+				{#if activeTrack}
+					<div class="mr-2 min-w-6 text-center text-body-lg tabular-nums">
+						{player.activeTrackIndex + 1}
 					</div>
-				{/key}
+
+					<div class="grid overflow-hidden" lang={getItemLanguage(activeTrack.language)}>
+						<div class="truncate text-body-lg">{activeTrack.name}</div>
+						<div class="truncate text-body-md">{formatArtists(activeTrack.artists)}</div>
+					</div>
+				{/if}
 
 				<div class="ml-auto flex gap-1">
 					<PlayerFavoriteButton />
@@ -266,13 +249,9 @@
 		</Header>
 
 		<div class="mx-auto flex w-full max-w-(--app-max-content-width) grow flex-col">
-			<div class={['flex grow', page.route.id !== '/(app)/player/lyrics' && 'p-4']}>
+			<div class={["flex grow", page.route.id !== '/(app)/player/lyrics' && "p-4"]}>
 				{#if page.route.id === '/(app)/player/lyrics'}
-					{#key player.activeTrack?.id}
-						<div class="contents" transition:fade={{ duration: 400 }}>
-							<SyncedLyrics track={activeTrack} currentTimeMs={player.currentTime * 1000} />
-						</div>
-					{/key}
+					<SyncedLyrics track={activeTrack} currentTimeMs={player.currentTime * 1000} />
 				{:else if isSelectedTabQueue}
 					{#if player.isQueueEmpty}
 						{@render emptyList(m.playerQueueEmpty())}
@@ -334,7 +313,7 @@
 	mode={layoutMode}
 	class={[
 		'grow active-view-player:view-name-[pl-card]',
-		layoutMode === 'both' && !player.activeTrack && 'bg-secondaryContainer',
+		layoutMode === 'both' && !player.animatedArtworkSrc && 'bg-secondaryContainer',
 	]}
 	list={playerSnippet}
 	details={queueSnippet}
