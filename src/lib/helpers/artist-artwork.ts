@@ -10,21 +10,35 @@ const pendingRequests = new Map<string, Promise<string | undefined>>()
 const getStorageKey = (artist: string) =>
 	`snaeplayer-artist-artwork.${artist}`
 
-type DeezerArtist = {
-	name: string
-	picture?: string
-	picture_medium?: string
-	picture_big?: string
-	picture_xl?: string
+// --------------------
+// Updated Type Definitions for JioSaavn Handler
+// --------------------
+
+type JioSaavnImageNode = {
+	quality: string
+	url: string
 }
 
-type DeezerSearchResponse = {
-	data: DeezerArtist[]
+type JioSaavnArtistRaw = {
+	id: string
+	name: string
+	role: string
+	type: string
+	image: JioSaavnImageNode[] | string
+	url: string
+}
+
+// Represents the curated object returning from your local SvelteKit GET route
+type JioSaavnCustomResponse = {
+	name: string
+	id: string
+	logo: string | null
+	raw: JioSaavnArtistRaw
 }
 
 type ApiResponse = {
 	success: boolean
-	data: DeezerSearchResponse
+	data: JioSaavnCustomResponse
 }
 
 type CachedArtwork =
@@ -186,15 +200,21 @@ export const getArtistArtwork = async (
 						return undefined
 					}
 
-					if (apiRes.success && apiRes.data?.data && apiRes.data.data.length > 0) {
-						const bestMatch = apiRes.data.data[0]
+					// Changed to check for JioSaavn custom return response structure
+					if (apiRes.success && apiRes.data) {
+						const match = apiRes.data
 
-						if (bestMatch) {
-							bestImage =
-								bestMatch.picture_xl ||
-								bestMatch.picture_big ||
-								bestMatch.picture_medium ||
-								bestMatch.picture
+						// Use the curated direct logo URL string
+						if (match.logo) {
+							bestImage = match.logo
+						} else if (match.raw && match.raw.image) {
+							// Resilient fallback logic directly reading raw JioSaavn data fallback
+							const rawImg = match.raw.image
+							if (Array.isArray(rawImg) && rawImg.length > 0) {
+								bestImage = rawImg[rawImg.length - 1].url
+							} else if (typeof rawImg === 'string') {
+								bestImage = rawImg
+							}
 						}
 					}
 				} catch (networkError: any) {
