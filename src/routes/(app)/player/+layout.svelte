@@ -65,16 +65,20 @@
 			out:fade={{ duration: 600 }}
 		>
 			<Artwork
-				src={undefined}
+				src={player.artworkSrc}
 				animatedSrc={isCompact ? (player.animatedArtworkTallSrc ?? player.animatedArtworkSrc) : player.animatedArtworkSrc}
 				noAspectSquare
+				onVideoLoad={() => (player.animatedArtworkLoaded = true)}
 				class={[
 					"size-full object-cover",
 					!isCompact && "blur-3xl opacity-50 scale-110"
 				]}
 			/>
-			{#if isCompact}
-				<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"></div>
+			{#if isCompact && player.animatedArtworkLoaded}
+				<div
+					class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20"
+					transition:fade
+				></div>
 			{/if}
 		</div>
 	{/key}
@@ -86,7 +90,7 @@
 			layoutMode === 'both' && 'w-100 2xl:w-[28dvw]',
 			layoutMode === 'list' && 'mx-auto w-full',
 			'player-content z-0 grow items-center gap-x-6 overflow-clip px-2 pb-2',
-			player.animatedArtworkSrc ? 'bg-transparent' : 'bg-secondaryContainerVariant',
+			(player.animatedArtworkSrc && player.animatedArtworkLoaded) ? 'bg-transparent' : 'bg-secondaryContainerVariant',
 			isCompactVertical && !isCompactHorizontal && 'player-content-horizontal',
 		]}
 	>
@@ -105,7 +109,7 @@
 
 		<!-- Wrap Artwork in a relative container to handle absolute transition children -->
 		<div class="relative flex items-center justify-center [grid-area:artwork] h-full w-full">
-			{#if !isCompact || !player.animatedArtworkSrc}
+			{#if !isCompact || !player.animatedArtworkSrc || !player.animatedArtworkLoaded}
 				{#key activeTrack?.id}
 					<div
 						class="absolute inset-0 m-auto flex items-center justify-center"
@@ -229,7 +233,7 @@
 	<ScrollContainer
 		class={[
 			'flex h-dvh scroll-pt-(--app-header-height) flex-col overflow-auto contain-strict scrollbar-gutter-stable',
-			isCompact && player.animatedArtworkSrc && 'dark bg-black/60 backdrop-blur-3xl [color-scheme:dark]',
+			isCompact && player.animatedArtworkSrc && player.animatedArtworkLoaded && 'dark bg-black/60 backdrop-blur-3xl [color-scheme:dark]',
 		]}
 	>
 		<Header
@@ -342,7 +346,7 @@
 	mode={layoutMode}
 	class={[
 		'grow active-view-player:view-name-[pl-card]',
-		layoutMode === 'both' && !player.animatedArtworkSrc && 'bg-secondaryContainer',
+		layoutMode === 'both' && !(player.animatedArtworkSrc && player.animatedArtworkLoaded) && 'bg-secondaryContainer',
 	]}
 	list={playerSnippet}
 	details={queueSnippet}
