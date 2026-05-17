@@ -58,7 +58,8 @@
 	<div class="fixed inset-0 -z-1 overflow-hidden pointer-events-none">
 		<Artwork
 			src={undefined}
-			animatedSrc={player.animatedArtworkSrc}
+			animatedSrc={isCompact ? (player.animatedArtworkTallSrc ?? player.animatedArtworkSrc) : player.animatedArtworkSrc}
+			noAspectSquare
 			class={[
 				"size-full object-cover",
 				!isCompact && "blur-3xl opacity-50 scale-110"

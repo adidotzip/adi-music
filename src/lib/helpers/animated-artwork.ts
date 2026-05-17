@@ -1,19 +1,31 @@
 import { SerialQueue } from './serial-queue.ts'
 
-const getStorageKey = (artist: string, album: string) =>
-	`snaeplayer-animated-artwork.${artist}:${album}`
+const getStorageKey = (artist: string, album: string, title?: string) =>
+	`snaeplayer-animated-artwork-v2.${artist}:${album}${title ? `:${title}` : ''}`
 
 const queue = new SerialQueue()
-const pendingRequests = new Map<string, Promise<string | undefined>>()
+
+export interface AnimatedArtwork {
+	url: string
+	urlTall?: string
+}
+
+const pendingRequests = new Map<string, Promise<AnimatedArtwork | undefined>>()
 
 export const getAnimatedArtwork = async (
 	artist: string,
 	album: string,
-): Promise<string | undefined> => {
-	const key = getStorageKey(artist, album)
+	title?: string,
+): Promise<AnimatedArtwork | undefined> => {
+	const key = getStorageKey(artist, album, title)
 	const cached = localStorage.getItem(key)
 	if (cached) {
-		return cached === 'none' ? undefined : cached
+		if (cached === 'none') return undefined
+		try {
+			return JSON.parse(cached)
+		} catch {
+			return { url: cached }
+		}
 	}
 
 	const pending = pendingRequests.get(key)
@@ -31,20 +43,30 @@ export const getAnimatedArtwork = async (
 				}
 
 				try {
-					const searchParams = new URLSearchParams({ artist, album })
+					const params: Record<string, string> = { artist, album }
+					if (title) {
+						params.title = title
+					}
+					const searchParams = new URLSearchParams(params)
 					const response = await fetch(
 						`https://artwork.m8tec.top/api/v1/artwork/search?${searchParams.toString()}`,
 					)
 
 					if (!response.ok) {
-						localStorage.setItem(key, 'none')
+						if (response.status === 404) {
+							localStorage.setItem(key, 'none')
+						}
 						return undefined
 					}
 
-					const data = (await response.json()) as { url?: string }
+					const data = (await response.json()) as { url?: string; url_tall?: string }
 					if (data.url) {
-						localStorage.setItem(key, data.url)
-						return data.url
+						const result: AnimatedArtwork = {
+							url: data.url,
+							urlTall: data.url_tall,
+						}
+						localStorage.setItem(key, JSON.stringify(result))
+						return result
 					}
 
 					localStorage.setItem(key, 'none')

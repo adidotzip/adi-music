@@ -77,6 +77,7 @@ export class PlayerStore {
 	#artwork = createManagedArtwork(() => this.activeTrack?.image?.full)
 	artworkSrc: string | undefined = $derived.by(this.#artwork)
 	animatedArtworkSrc: string | undefined = $state()
+	animatedArtworkTallSrc: string | undefined = $state()
 
 	constructor() {
 		persist('player', this, ['volume', 'repeat', 'muted', 'playbackRate', 'preservePitch'])
@@ -154,15 +155,18 @@ export class PlayerStore {
 
 			if (track) {
 				this.animatedArtworkSrc = undefined
+				this.animatedArtworkTallSrc = undefined
 				const artist = (track.artists[0] as string) ?? ''
-				if (artist === UNKNOWN_ITEM) {
+				const album = track.album
+				if (artist === UNKNOWN_ITEM || album === UNKNOWN_ITEM) {
 					this.animatedArtworkSrc = undefined
 					return
 				}
-				getAnimatedArtwork(artist, track.album)
-					.then((url) => {
+				getAnimatedArtwork(artist, album, track.name)
+					.then((result) => {
 						if (this.activeTrack?.id === track.id) {
-							this.animatedArtworkSrc = url
+							this.animatedArtworkSrc = result?.url
+							this.animatedArtworkTallSrc = result?.urlTall
 						}
 					})
 					.catch((error) => {
@@ -171,6 +175,7 @@ export class PlayerStore {
 					})
 			} else {
 				this.animatedArtworkSrc = undefined
+				this.animatedArtworkTallSrc = undefined
 			}
 		})
 

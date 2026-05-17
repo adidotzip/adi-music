@@ -59,12 +59,12 @@
 		if (slug === 'albums' && item) {
 			const album = item as AlbumData
 			const artist = (album.artists[0] as string) ?? ''
-			if (artist === UNKNOWN_ITEM) {
+			if (artist === UNKNOWN_ITEM || album.name === UNKNOWN_ITEM) {
 				animatedArtworkSrc = undefined
 				return
 			}
-			getAnimatedArtwork(artist, album.name).then((url) => {
-				animatedArtworkSrc = url
+			getAnimatedArtwork(artist, album.name).then((result) => {
+				animatedArtworkSrc = result?.url
 			})
 		} else if (slug === 'artists' && item) {
 			artistArtworkSrc = undefined
