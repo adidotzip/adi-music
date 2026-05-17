@@ -11,6 +11,8 @@
 		fallbackIcon?: IconType | false
 		noFallbackBg?: boolean
 		noAspectSquare?: boolean
+		onVideoLoad?: () => void
+		onVideoError?: () => void
 		children?: Snippet
 	}
 
@@ -20,6 +22,8 @@
 		fallbackIcon = 'musicNote',
 		noFallbackBg,
 		noAspectSquare,
+		onVideoLoad,
+		onVideoError,
 		class: className,
 		alt,
 		children,
@@ -91,9 +95,11 @@
 			]}
 			onerror={() => {
 				animatedError = true
+				onVideoError?.()
 			}}
 			onloadeddata={() => {
 				videoLoaded = true
+				onVideoLoad?.()
 			}}
 		></video>
 	{/if}

@@ -261,7 +261,7 @@
 	</div>
 {/snippet}
 
-<section class={["lyrics-shell w-full h-full relative overflow-hidden", !player.animatedArtworkSrc && "bg-black dark", className]} aria-live="polite">
+<section class={["lyrics-shell w-full h-full relative overflow-hidden", !(player.animatedArtworkSrc && player.animatedArtworkLoaded) && "bg-black dark", className]} aria-live="polite">
 	{#if !track}
 		{@render emptyState('musicNote', 'No Track Playing', 'Play a track to follow along with the lyrics.')}
 	{:else if loading}

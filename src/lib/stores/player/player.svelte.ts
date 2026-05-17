@@ -78,6 +78,7 @@ export class PlayerStore {
 	artworkSrc: string | undefined = $derived.by(this.#artwork)
 	animatedArtworkSrc: string | undefined = $state()
 	animatedArtworkTallSrc: string | undefined = $state()
+	animatedArtworkLoaded: boolean = $state(false)
 
 	constructor() {
 		persist('player', this, ['volume', 'repeat', 'muted', 'playbackRate', 'preservePitch'])
@@ -156,6 +157,7 @@ export class PlayerStore {
 			if (track) {
 				this.animatedArtworkSrc = undefined
 				this.animatedArtworkTallSrc = undefined
+				this.animatedArtworkLoaded = false
 				const artist = (track.artists[0] as string) ?? ''
 				const album = track.album
 				if (artist === UNKNOWN_ITEM || album === UNKNOWN_ITEM) {
@@ -176,6 +178,7 @@ export class PlayerStore {
 			} else {
 				this.animatedArtworkSrc = undefined
 				this.animatedArtworkTallSrc = undefined
+				this.animatedArtworkLoaded = false
 			}
 		})
 
