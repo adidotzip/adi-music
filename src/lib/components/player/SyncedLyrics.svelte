@@ -56,37 +56,47 @@
 		damping: 0.75, 
 	})
 
-	// ─── RAF-driven smooth time ───────────────────────────────────────────────
+	// ─── RAF-driven smooth time (Fixed double-bounce jitter) ────────────────
 	let smoothTimeMs = $state(0)
 	let lastPropTime = $state(0)
-	let lastRafTimestamp: number | undefined
 
 	$effect(() => {
-		lastPropTime = currentTimeMs
-		if (lastRafTimestamp === undefined) {
+		// When the authoritative prop changes, we only snap if it's a huge difference (like a seek)
+		// Otherwise, we let the RAF loop smoothly catch up to prevent backwards jitter.
+		if (!player.playing) {
 			smoothTimeMs = currentTimeMs
+		} else {
+			const diff = Math.abs(currentTimeMs - smoothTimeMs)
+			if (diff > 1500) {
+				smoothTimeMs = currentTimeMs
+			}
 		}
-		lastRafTimestamp = undefined
+		lastPropTime = currentTimeMs
 	})
 
 	$effect(() => {
 		let running = true
+		let lastTime = performance.now()
+
 		const tick = (now: number) => {
 			if (!running) return
-			if (lastRafTimestamp === undefined) {
-				lastRafTimestamp = now
-				smoothTimeMs = lastPropTime
-			} else {
-				const elapsed = now - lastRafTimestamp
-				lastRafTimestamp = now
-				if (player.playing) {
-					smoothTimeMs += elapsed
-				} else {
-					smoothTimeMs = lastPropTime
+			const elapsed = now - lastTime
+			lastTime = now
+
+			if (player.playing) {
+				// Always move forward
+				smoothTimeMs += elapsed
+				
+				// Soft drift correction: if we fall behind the prop time, speed up slightly.
+				// We intentionally do NOT correct backwards to prevent the words from double-bouncing.
+				const drift = lastPropTime - smoothTimeMs
+				if (drift > 200) {
+					smoothTimeMs += drift * 0.15 
 				}
 			}
 			requestAnimationFrame(tick)
 		}
+		
 		const rafId = requestAnimationFrame(tick)
 		return () => {
 			running = false
@@ -97,7 +107,6 @@
 	const foundResult = $derived(result?.status === 'found' ? result : undefined)
 	const lines = $derived(foundResult?.lines ?? [])
 	
-	// Backend is now the single source of truth for sync mode.
 	const syncType = $derived(foundResult?.syncType ?? 'line')
 	const isLineLevel = $derived(syncType === 'line')
 
@@ -151,7 +160,6 @@
 				...line, 
 				words: cleanedWords, 
 				isSecondaryLine,
-				// Capture opposite singer flag from API (default to false if unsupported)
 				isOpposite: (line as any).isOpposite ?? false
 			})
 		}
@@ -243,15 +251,13 @@
 		lastTouchY = touchY
 		scrollOffset.update(v => v - deltaY, { hard: true })
 	}
-
-	const retry = () => { reloadCount += 1 }
 </script>
 
 {#snippet emptyState(icon: 'musicNote' | 'alertCircle', title: string, description: string)}
 	<div class="empty-state z-10 m-auto flex h-full max-w-80 flex-col items-center justify-center text-center opacity-50 transition-opacity duration-500">
-		<Icon type={icon} class="mb-4 h-12 w-12 text-black/40 dark:text-white/40" />
-		<h3 class="text-xl font-bold text-black dark:text-white">{title}</h3>
-		<p class="mt-2 text-sm text-black/60 dark:text-white/60">{description}</p>
+		<Icon type={icon} class="mb-4 h-12 w-12" style="color: var(--lyric-inactive)" />
+		<h3 class="text-xl font-bold" style="color: var(--lyric-active-fill)">{title}</h3>
+		<p class="mt-2 text-sm" style="color: var(--lyric-inactive)">{description}</p>
 	</div>
 {/snippet}
 
@@ -260,7 +266,7 @@
 		{@render emptyState('musicNote', 'No Track Playing', 'Play a track to follow along with the lyrics.')}
 	{:else if loading}
 		<div class="flex h-full w-full items-center justify-center">
-			<Spinner class="h-8 w-8 text-black/50 dark:text-white/50" />
+			<Spinner class="h-8 w-8" style="color: var(--lyric-inactive)" />
 		</div>
 	{:else if result?.status === 'found'}
 		<div
@@ -345,14 +351,12 @@
 							{:else}
 								{#if primaryWords.length > 0}
 									<div class="primary-lyrics-block">
-										<!-- Removing any linebreaks/whitespace between spans to ensure strict concatenation -->
 										{#each primaryWords as word}{#if word.string.length > 0}{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}{@const duration = Math.max(nextTime - word.time, 1)}{@const wordProgress = isLinePast ? 100 : (isCurrentWord ? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 : isPastWord ? 100 : 0)}<span class="lyric-word" class:is-sung={isPastWord || isCurrentWord} class:is-current={isCurrentWord} style="--word-progress: {wordProgress}%">{word.string}</span>{/if}{/each}
 									</div>
 								{/if}
 
 								{#if secondaryWords.length > 0}
 									<div class="secondary-lyrics-block">
-										<!-- Removing any linebreaks/whitespace between spans to ensure strict concatenation -->
 										{#each secondaryWords as word}{#if word.string.length > 0}{@const isPastWord = isLinePast || (isActiveLine && word.originalIndex < activeWordIdx)}{@const isCurrentWord = isActiveLine && word.originalIndex === activeWordIdx}{@const nextTime = item.words[word.originalIndex + 1]?.time ?? item.endTime}{@const duration = Math.max(nextTime - word.time, 1)}{@const wordProgress = isLinePast ? 100 : (isCurrentWord ? Math.min(Math.max((smoothTimeMs - word.time) / duration, 0), 1) * 100 : isPastWord ? 100 : 0)}<span class="lyric-word secondary-word" class:is-sung={isPastWord || isCurrentWord} class:is-current={isCurrentWord} style="--word-progress: {wordProgress}%">{word.string}</span>{/if}{/each}
 									</div>
 								{/if}
@@ -370,36 +374,27 @@
 <style lang="postcss">
 	@reference "../../../app.css";
 
+	/* ─── Robust Light/Dark Mode Mapping ────────────────────────────── */
 	.lyrics-shell {
-		/* Light mode theme variables */
-		--lyric-text-color: #000000;
-		--lyric-fill-color: #000000;
-		--lyric-base-color: rgba(0, 0, 0, 0.2);
-		--lyric-sec-text-color: rgba(0, 0, 0, 0.6);
-		--lyric-sec-fill-color: rgba(0, 0, 0, 0.85);
-		--lyric-sec-base-color: rgba(0, 0, 0, 0.15);
+		/* Defaults for a light environment */
+		--lyric-inactive: rgba(0, 0, 0, 0.4);
+		--lyric-active-fill: #000000;
+		--lyric-active-unfill: rgba(0, 0, 0, 0.15);
 	}
 
 	@media (prefers-color-scheme: dark) {
 		.lyrics-shell {
-			/* Dark mode theme variables */
-			--lyric-text-color: #ffffff;
-			--lyric-fill-color: #ffffff;
-			--lyric-base-color: rgba(255, 255, 255, 0.3);
-			--lyric-sec-text-color: rgba(255, 255, 255, 0.6);
-			--lyric-sec-fill-color: rgba(255, 255, 255, 0.85);
-			--lyric-sec-base-color: rgba(255, 255, 255, 0.15);
+			--lyric-inactive: rgba(255, 255, 255, 0.5);
+			--lyric-active-fill: #ffffff;
+			--lyric-active-unfill: rgba(255, 255, 255, 0.25);
 		}
 	}
 
-	/* Force dark mode variables if the shell has a specific background logic forcing it black */
-	.lyrics-shell.bg-black {
-		--lyric-text-color: #ffffff;
-		--lyric-fill-color: #ffffff;
-		--lyric-base-color: rgba(255, 255, 255, 0.3);
-		--lyric-sec-text-color: rgba(255, 255, 255, 0.6);
-		--lyric-sec-fill-color: rgba(255, 255, 255, 0.85);
-		--lyric-sec-base-color: rgba(255, 255, 255, 0.15);
+	/* Overrides: if the container gets 'bg-black' or 'dark' forcefully */
+	.lyrics-shell.bg-black, :global(.dark) .lyrics-shell, .lyrics-shell.dark {
+		--lyric-inactive: rgba(255, 255, 255, 0.5);
+		--lyric-active-fill: #ffffff;
+		--lyric-active-unfill: rgba(255, 255, 255, 0.25);
 	}
 
 	.lyrics-container {
@@ -472,7 +467,7 @@
 		line-height: 1.2;
 		letter-spacing: -0.02em;
 		white-space: pre-wrap;
-		color: var(--lyric-text-color);
+		color: var(--lyric-inactive);
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
 	}
@@ -508,55 +503,40 @@
 		@media (min-width: 1024px) { font-size: 2.5rem; }
 		font-weight: 600;
 		font-style: italic;
-		color: var(--lyric-sec-text-color);
 	}
 
 	.lyric-word.secondary-word {
 		font-size: 0.85em; 
-		color: var(--lyric-sec-text-color);
 		font-style: italic;
 	}
 
 	.lyric-word {
-		/* Kept inline to restore kerning and prevent box-breaking */
 		display: inline;
 		position: relative;
 		white-space: pre-wrap;
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
 		
-		/* Animates up when sung via the `top` property */
+		/* Animates up smoothly when sung via the `top` property */
 		top: 0;
-		transition: top 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+		transition: top 0.3s ease-out; /* Smoother curve, no bounce */
 	}
 
 	.lyric-word.is-current {
-		top: -6px;
+		top: -3px; /* Reduced harshness, subtle lift */
 	}
 
 	.lyric-line.active .lyric-word {
 		background: linear-gradient(
 			to right,
-			var(--lyric-fill-color) 0%,
-			var(--lyric-fill-color) var(--word-progress),
-			var(--lyric-base-color) calc(var(--word-progress) + 5%),
-			var(--lyric-base-color) 100%
+			var(--lyric-active-fill) 0%,
+			var(--lyric-active-fill) var(--word-progress),
+			var(--lyric-active-unfill) calc(var(--word-progress) + 5%),
+			var(--lyric-active-unfill) 100%
 		);
 		-webkit-background-clip: text;
 		background-clip: text;
 		color: transparent;
-	}
-
-	.lyric-line.active .lyric-word.secondary-word {
-		background: linear-gradient(
-			to right,
-			var(--lyric-sec-fill-color) 0%,
-			var(--lyric-sec-fill-color) var(--word-progress),
-			var(--lyric-sec-base-color) calc(var(--word-progress) + 5%),
-			var(--lyric-sec-base-color) 100%
-		);
-		-webkit-background-clip: text;
-		background-clip: text;
 	}
 
 	.lyric-break {
@@ -574,13 +554,13 @@
 		width: 10px;
 		height: 10px;
 		border-radius: 50%;
-		background-color: var(--lyric-sec-base-color);
+		background-color: var(--lyric-active-unfill);
 		transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 		transform: scale(1);
 	}
 
 	.dot.filled {
-		background-color: var(--lyric-fill-color);
+		background-color: var(--lyric-active-fill);
 		transform: scale(1.5);
 	}
 </style>
