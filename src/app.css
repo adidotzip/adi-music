@@ -86,9 +86,6 @@
 html {
 	background-color: var(--color-surface);
 	color: var(--color-onSurface);
-	transition:
-		background-color 0.3s var(--ease-standard),
-		color 0.3s var(--ease-standard);
 	font-family: var(--font-sans);
 	font-optical-sizing: auto;
 	color-scheme: light;
