@@ -11,7 +11,7 @@ const getStorageKey = (artist: string) =>
 	`snaeplayer-artist-artwork.${artist}`
 
 // --------------------
-// Updated Type Definitions for JioSaavn Handler
+// Fixed Type Definitions matching JioSaavn Data Shape
 // --------------------
 
 type JioSaavnImageNode = {
@@ -19,26 +19,24 @@ type JioSaavnImageNode = {
 	url: string
 }
 
-type JioSaavnArtistRaw = {
+type JioSaavnArtist = {
 	id: string
 	name: string
 	role: string
+	image: JioSaavnImageNode[]
 	type: string
-	image: JioSaavnImageNode[] | string
 	url: string
 }
 
-// Represents the curated object returning from your local SvelteKit GET route
-type JioSaavnCustomResponse = {
-	name: string
-	id: string
-	logo: string | null
-	raw: JioSaavnArtistRaw
+type JioSaavnSearchContainer = {
+	total: number
+	start: number
+	results: JioSaavnArtist[]
 }
 
 type ApiResponse = {
 	success: boolean
-	data: JioSaavnCustomResponse
+	data: JioSaavnSearchContainer
 }
 
 type CachedArtwork =
@@ -200,21 +198,14 @@ export const getArtistArtwork = async (
 						return undefined
 					}
 
-					// Changed to check for JioSaavn custom return response structure
-					if (apiRes.success && apiRes.data) {
-						const match = apiRes.data
+					// Fixed layout verification matching: apiRes.data.results
+					if (apiRes.success && apiRes.data?.results && apiRes.data.results.length > 0) {
+						const bestMatch = apiRes.data.results[0]
 
-						// Use the curated direct logo URL string
-						if (match.logo) {
-							bestImage = match.logo
-						} else if (match.raw && match.raw.image) {
-							// Resilient fallback logic directly reading raw JioSaavn data fallback
-							const rawImg = match.raw.image
-							if (Array.isArray(rawImg) && rawImg.length > 0) {
-								bestImage = rawImg[rawImg.length - 1].url
-							} else if (typeof rawImg === 'string') {
-								bestImage = rawImg
-							}
+						if (bestMatch && Array.isArray(bestMatch.image) && bestMatch.image.length > 0) {
+							// Pull the 500x500 high-res artwork layout sitting at the end of the array
+							const highResNode = bestMatch.image[bestMatch.image.length - 1]
+							bestImage = highResNode.url
 						}
 					}
 				} catch (networkError: any) {
