@@ -46,6 +46,10 @@ export interface TrackData extends Track {
 
 const trackConfig: QueryConfig<TrackData> = {
 	fetch: async (id) => {
+		if (id < 0) {
+			return undefined
+		}
+
 		const db = await getDatabase()
 		const tx = db.transaction(['tracks', 'playlistEntries'], 'readonly')
 
@@ -294,6 +298,9 @@ export const getLibraryValue = <Store extends LibraryStoreName, AllowEmpty exten
 ): Promise<GetLibraryValueResult<Store, AllowEmpty>> | GetLibraryValueResult<Store, AllowEmpty> => {
 	const key = getCacheKey(storeName, id)
 	const result = getCachedOrFetchValue(key, () => {
+		if (id < 0 && id !== FAVORITE_PLAYLIST_ID) {
+			return Promise.resolve(undefined)
+		}
 		const config: LibraryConfigMap[Store] = libraryConfigMap[storeName]
 
 		return config.fetch(id)
@@ -321,6 +328,16 @@ export const preloadLibraryValue = async (
 	} catch {
 		// Ignore
 	}
+}
+
+/** @public */
+export const setLibraryValueInCache = <Store extends LibraryStoreName>(
+	storeName: Store,
+	id: number,
+	value: LibraryValue<Store>,
+) => {
+	const key = getCacheKey(storeName, id)
+	valueCache.set(key, value)
 }
 
 export const shouldRefetchLibraryValue = (
