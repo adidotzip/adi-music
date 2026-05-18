@@ -1,0 +1,23 @@
+$ vite dev
+✔ [paraglide-js] Compilation complete (locale-modules)
+
+  VITE v8.0.10  ready in 4388 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+11:02:58 AM [vite] (client) hmr update /src/app.css
+11:02:58 AM [vite] (client) hmr update /src/app.css
+11:02:58 AM [vite] (client) hmr update /src/app.css
+11:03:34 AM [vite] (client) page reload src/lib/library/types.ts
+11:03:39 AM [vite] (client) page reload src/lib/services/jiosaavn.ts
+11:03:47 AM [vite] (client) page reload .generated/svelte-kit/generated/client/nodes/0.js
+11:03:47 AM [vite] (client) page reload .generated/svelte-kit/generated/client/nodes/1.js
+11:03:47 AM [vite] (client) page reload .generated/svelte-kit/generated/client/nodes/2.js
+11:03:47 AM [vite] (client) page reload .generated/svelte-kit/generated/client/nodes/4.js
+11:03:47 AM [vite] (client) page reload .generated/svelte-kit/generated/client/nodes/8.js
+11:03:47 AM [vite] (client) page reload .generated/svelte-kit/generated/client/app.js
+11:03:47 AM [vite] (client) page reload .generated/svelte-kit/generated/client/matchers.js
+11:03:47 AM [vite] (ssr) page reload .generated/svelte-kit/generated/server/internal.js
+11:03:47 AM [vite] (client) page reload .generated/svelte-kit/generated/root.js
+11:03:47 AM [vite] (ssr) page reload .generated/svelte-kit/generated/root.js
+11:03:47 AM [vite] (ssr) page reload .generated/svelte-kit/generated/root.svelte
